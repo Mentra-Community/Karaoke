@@ -4,14 +4,17 @@
   "main": "index.js",
   "scripts": {
     "start": "bun src/index.ts",
-    "dev": "bun --hot src/index.ts",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "bun --watch src/index.ts",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "ngrok": "ngrok http --url=isaiah-tpa.ngrok.app 3000"
   },
   "author": "",
   "license": "ISC",
   "description": "",
   "dependencies": {
     "@mentra/sdk": "^2.0.3",
+    "@types/cors": "^2.8.19",
+    "cors": "^2.8.5",
     "ejs": "^3.1.10",
     "express": "^4.21.2",
     "ws": "^8.18.1"
