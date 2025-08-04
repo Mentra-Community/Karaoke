@@ -116,7 +116,14 @@ export class UserSession {
 
   private async handleRecognitionResult(result: RecognitionResult | null): Promise<void> {
     if (!result || result.error || result.confidence < 0.7) {
+      this.logger.debug({ 
+        hasResult: !!result,
+        error: result?.error,
+        confidence: result?.confidence 
+      }, 'Invalid recognition result');
+      
       if (this.currentSong && this.positionTracker.getConfidence() < 0.5) {
+        this.logger.info({}, 'Low position confidence, resetting to listening');
         this.resetToListening();
       }
       return;
@@ -126,26 +133,52 @@ export class UserSession {
       this.currentSong.title === result.title &&
       this.currentSong.artist === result.artist;
 
+    this.logger.info({
+      currentSong: this.currentSong?.title,
+      currentArtist: this.currentSong?.artist,
+      newSong: result.title,
+      newArtist: result.artist,
+      isSameSong,
+      offsetSeconds: result.offsetSeconds
+    }, 'Processing recognition result');
+
     if (isSameSong && result.offsetSeconds !== undefined) {
       const isValid = this.positionTracker.validatePosition(
         result.offsetSeconds,
         Date.now(),
-        result.confidence
+        result.confidence,
+        0 // apiLatency - we should pass this through
       );
 
       if (!isValid) {
+        this.logger.info({ 
+          expectedPosition: this.positionTracker.getCurrentPosition(),
+          detectedPosition: result.offsetSeconds,
+          drift: Math.abs(this.positionTracker.getCurrentPosition() - result.offsetSeconds)
+        }, 'Position drift detected, recalibrating');
+        
         this.positionTracker.recalibrate(
           result.offsetSeconds,
           Date.now(),
-          result.confidence
+          result.confidence,
+          0 // apiLatency
         );
       }
-    } else {
+    } else if (!isSameSong) {
+      this.logger.info({
+        previousSong: this.currentSong?.title,
+        newSong: result.title
+      }, 'New song detected, switching');
       await this.handleNewSong(result);
     }
   }
 
   private async handleNewSong(result: RecognitionResult): Promise<void> {
+    this.logger.info({ 
+      previousState: AppState[this.appState],
+      newState: AppState[AppState.PROCESSING]
+    }, 'State transition: Processing new song');
+    
     this.appState = AppState.PROCESSING;
     this.displayManager.showProcessing();
 
@@ -170,13 +203,26 @@ export class UserSession {
       );
     }
 
+    this.logger.info({}, 'Fetching lyrics for new song');
     const lrcData = await this.lyricsManager.fetchLyrics(newSong);
     
     if (lrcData && lrcData.length > 0) {
       this.currentSong.lrcData = lrcData;
       this.currentSong.hasLyrics = true;
+      
+      this.logger.info({ 
+        previousState: AppState[this.appState],
+        newState: AppState[AppState.SONG_DETECTED_WITH_LYRICS],
+        lyricsCount: lrcData.length
+      }, 'State transition: Lyrics found');
+      
       this.appState = AppState.SONG_DETECTED_WITH_LYRICS;
     } else {
+      this.logger.info({ 
+        previousState: AppState[this.appState],
+        newState: AppState[AppState.SONG_DETECTED_NO_LYRICS]
+      }, 'State transition: No lyrics available');
+      
       this.appState = AppState.SONG_DETECTED_NO_LYRICS;
     }
 
@@ -184,37 +230,28 @@ export class UserSession {
   }
 
   private updateDisplay(): void {
-    if (this.appState === AppState.LISTENING) {
-      this.displayManager.showListening();
-      return;
-    }
-
-    if (this.appState === AppState.PROCESSING) {
-      this.displayManager.showProcessing();
-      return;
-    }
-
-    if (!this.currentSong) {
-      this.displayManager.showListening();
-      return;
-    }
-
     const position = this.positionTracker.getCurrentPosition();
+    
+    // Use the new 5-line formatter
+    const currentChunk = this.currentSong && this.appState === AppState.SONG_DETECTED_WITH_LYRICS
+      ? this.lyricsManager.getCurrentChunk(position)
+      : null;
+    
+    const nextChunk = this.currentSong && this.appState === AppState.SONG_DETECTED_WITH_LYRICS
+      ? this.lyricsManager.getNextChunk(position)
+      : null;
+    
+    this.displayManager.displayFormatted(
+      this.appState,
+      this.currentSong,
+      currentChunk,
+      nextChunk,
+      position
+    );
 
-    if (position > this.currentSong.duration && this.currentSong.duration > 0) {
+    // Check if song ended
+    if (this.currentSong && position > this.currentSong.duration && this.currentSong.duration > 0) {
       this.resetToListening();
-      return;
-    }
-
-    if (this.appState === AppState.SONG_DETECTED_WITH_LYRICS) {
-      const chunk = this.lyricsManager.getCurrentChunk(position);
-      if (chunk) {
-        this.displayManager.showLyrics(chunk);
-      } else {
-        this.displayManager.showSongInfo(this.currentSong, position);
-      }
-    } else {
-      this.displayManager.showSongInfo(this.currentSong, position);
     }
   }
 

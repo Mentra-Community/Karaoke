@@ -1,6 +1,7 @@
 import { AppSession } from '@mentra/sdk';
-import { CurrentSong, LyricsChunk } from '../types';
+import { CurrentSong, LyricsChunk, AppState } from '../types';
 import { formatTimestamp } from '../utils/lrcParser';
+import { FiveLineDisplayFormatter } from './FiveLineDisplayFormatter';
 
 export class DisplayManager {
   private currentDisplay: string = '';
@@ -8,10 +9,13 @@ export class DisplayManager {
   private session: AppSession;
   private updateInterval?: NodeJS.Timeout;
   private logger: AppSession['logger'];
+  private formatter: FiveLineDisplayFormatter;
+  private useNewFormatter: boolean = true; // Feature flag
 
   constructor(session: AppSession) {
     this.session = session;
     this.logger = session.logger.child({ service: 'DisplayManager' });
+    this.formatter = new FiveLineDisplayFormatter();
   }
 
   showListening(): void {
@@ -97,5 +101,37 @@ export class DisplayManager {
   clear(): void {
     this.stopUpdateTimer();
     this.updateDisplay('');
+  }
+
+  // New display method using 5-line formatter
+  displayFormatted(
+    appState: AppState,
+    currentSong?: CurrentSong,
+    currentChunk?: LyricsChunk | null,
+    nextChunk?: LyricsChunk | null,
+    position?: number
+  ): void {
+    if (!this.useNewFormatter) {
+      return;
+    }
+
+    const lines = this.formatter.formatDisplay(
+      appState,
+      currentSong,
+      currentChunk,
+      nextChunk,
+      position
+    );
+
+    const formattedText = lines.join('\n');
+    
+    this.logger.debug({
+      appState: AppState[appState],
+      linesCount: lines.length,
+      hasCurrentChunk: !!currentChunk,
+      hasNextChunk: !!nextChunk
+    }, 'Using 5-line formatter');
+
+    this.updateDisplay(formattedText);
   }
 }

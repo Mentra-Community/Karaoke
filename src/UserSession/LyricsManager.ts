@@ -2,6 +2,7 @@ import { CurrentSong, LRCLine, LyricsChunk } from '../types';
 import { LRCService } from '../services/LRCService';
 import { parseLRC } from '../utils/lrcParser';
 import { chunkLyrics } from '../utils/textChunker';
+import { preprocessLRC, analyzeLRCPatterns } from '../utils/lrcPreprocessor';
 
 export class LyricsManager {
   private cachedLRC = new Map<string, LRCLine[]>();
@@ -25,8 +26,22 @@ export class LyricsManager {
         return null;
       }
 
-      const lrcData = parseLRC(lrcContent);
-      if (lrcData.length > 0) {
+      const rawLrcData = parseLRC(lrcContent);
+      if (rawLrcData.length > 0) {
+        // Analyze if preprocessing would help
+        const analysis = analyzeLRCPatterns(rawLrcData);
+        
+        let lrcData = rawLrcData;
+        if (analysis.recommendPreprocessing) {
+          const preprocessed = preprocessLRC(rawLrcData);
+          lrcData = preprocessed.lines;
+          console.log('LRC preprocessed:', {
+            originalLines: rawLrcData.length,
+            processedLines: lrcData.length,
+            metadata: preprocessed.metadata
+          });
+        }
+        
         this.cachedLRC.set(cacheKey, lrcData);
         this.currentChunks = this.chunkLyrics(lrcData);
         return lrcData;
@@ -57,6 +72,27 @@ export class LyricsManager {
     const nextChunk = this.currentChunks.find(chunk => chunk.startTime > position);
     if (nextChunk && nextChunk.startTime - position < 1) {
       return nextChunk;
+    }
+
+    return null;
+  }
+
+  getNextChunk(position: number): LyricsChunk | null {
+    if (this.currentChunks.length === 0) {
+      return null;
+    }
+
+    const currentChunk = this.getCurrentChunk(position);
+    if (!currentChunk) {
+      return this.currentChunks.find(chunk => chunk.startTime > position) || null;
+    }
+
+    const currentIndex = this.currentChunks.findIndex(
+      chunk => chunk.startTime === currentChunk.startTime
+    );
+    
+    if (currentIndex >= 0 && currentIndex < this.currentChunks.length - 1) {
+      return this.currentChunks[currentIndex + 1];
     }
 
     return null;
