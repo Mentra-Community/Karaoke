@@ -1,17 +1,29 @@
 import { RecognitionResult } from '../types';
 import { ACRCloudService } from '../services/ACRCloudService';
 import { combineAudioBuffers, trimAudioBuffer } from '../utils/audioUtils';
+import { 
+  RecognitionState, 
+  RecognitionConfig, 
+  DEFAULT_RECOGNITION_CONFIG,
+  PendingRecognition,
+  RecognitionHistoryEntry 
+} from '../types/recognition';
 
 export class RecognitionManager {
   private audioBuffer: Buffer[] = [];
   private isRecording: boolean = false;
   private lastRecognitionTime: number = 0;
-  private readonly RECOGNITION_INTERVAL = 12000;
-  private readonly AUDIO_BUFFER_DURATION = 8000;
   private acrService: ACRCloudService;
   private onRecognition: (result: RecognitionResult | null) => void;
   private logger: any;
   private sampleRate: number = 16000; // Default sample rate
+  
+  // State machine
+  private state: RecognitionState = RecognitionState.LISTENING;
+  private config: RecognitionConfig = DEFAULT_RECOGNITION_CONFIG;
+  private pendingRecognition: PendingRecognition | null = null;
+  private recognitionHistory: RecognitionHistoryEntry[] = [];
+  private lastConfidentRecognition: number = 0;
 
   constructor(
     acrService: ACRCloudService,
@@ -47,11 +59,17 @@ export class RecognitionManager {
     this.audioBuffer.push(audioData);
     
     const combinedBuffer = combineAudioBuffers(this.audioBuffer);
-    const trimmedBuffer = trimAudioBuffer(combinedBuffer, this.AUDIO_BUFFER_DURATION);
+    const bufferDuration = this.getAudioBufferDuration();
+    const trimmedBuffer = trimAudioBuffer(combinedBuffer, bufferDuration);
     this.audioBuffer = [trimmedBuffer];
 
     if (this.shouldRecognize()) {
-      this.logger.info({}, 'Recognition interval reached, performing recognition');
+      const interval = this.getRecognitionInterval();
+      this.logger.info({ 
+        state: RecognitionState[this.state],
+        interval,
+        bufferDuration 
+      }, 'Recognition interval reached');
       // Set the time immediately to prevent multiple calls
       this.lastRecognitionTime = Date.now();
       this.performRecognition().catch(err => {
@@ -76,7 +94,7 @@ export class RecognitionManager {
       audioSize: audioData.length,
       wavSize: wavBuffer.length,
       sampleRate: this.sampleRate,
-      duration: this.AUDIO_BUFFER_DURATION 
+      duration: this.getAudioBufferDuration() 
     }, 'Sending audio to ACRCloud');
     
     try {
@@ -120,11 +138,82 @@ export class RecognitionManager {
 
   shouldRecognize(): boolean {
     const now = Date.now();
-    // If we've never recognized before, check immediately
+    // If we've never recognized before, wait for enough audio
     if (this.lastRecognitionTime === 0) {
-      return true;
+      // Need at least 3 seconds of audio for first recognition
+      const combinedBuffer = combineAudioBuffers(this.audioBuffer);
+      const minSize = this.sampleRate * 2 * 3; // 3 seconds of 16-bit mono
+      return combinedBuffer.length >= minSize;
     }
-    return now - this.lastRecognitionTime >= this.RECOGNITION_INTERVAL;
+    const interval = this.getRecognitionInterval();
+    return now - this.lastRecognitionTime >= interval;
+  }
+  
+  setState(state: RecognitionState): void {
+    this.logger.info({
+      previousState: RecognitionState[this.state],
+      newState: RecognitionState[state]
+    }, 'Recognition state change');
+    this.state = state;
+  }
+  
+  getState(): RecognitionState {
+    return this.state;
+  }
+  
+  setPendingRecognition(pending: PendingRecognition | null): void {
+    this.pendingRecognition = pending;
+  }
+  
+  getPendingRecognition(): PendingRecognition | null {
+    return this.pendingRecognition;
+  }
+  
+  updateLastConfidentRecognition(): void {
+    this.lastConfidentRecognition = Date.now();
+  }
+  
+  private getRecognitionInterval(): number {
+    const now = Date.now();
+    const timeSinceConfident = now - this.lastConfidentRecognition;
+    
+    switch (this.state) {
+      case RecognitionState.LISTENING:
+        return this.config.RECOGNITION_INTERVAL_LISTENING;
+      
+      case RecognitionState.SONG_DETECTED_PENDING:
+      case RecognitionState.SONG_SWITCH_PENDING:
+        return this.config.RECOGNITION_INTERVAL_VERIFY;
+      
+      case RecognitionState.SONG_PLAYING:
+      case RecognitionState.SONG_DETECTED_CONFIRMED:
+        if (timeSinceConfident > this.config.CONFIDENCE_DECAY_TIME) {
+          return this.config.RECOGNITION_INTERVAL_UNCERTAIN;
+        }
+        return this.config.RECOGNITION_INTERVAL_PLAYING;
+      
+      case RecognitionState.SONG_ENDING:
+        return this.config.RECOGNITION_INTERVAL_VERIFY;
+      
+      default:
+        return this.config.RECOGNITION_INTERVAL_PLAYING;
+    }
+  }
+  
+  private getAudioBufferDuration(): number {
+    if (this.state === RecognitionState.SONG_DETECTED_PENDING ||
+        this.state === RecognitionState.SONG_SWITCH_PENDING) {
+      return this.config.AUDIO_BUFFER_DURATION_VERIFY;
+    }
+    return this.config.AUDIO_BUFFER_DURATION_NORMAL;
+  }
+  
+  addToHistory(entry: RecognitionHistoryEntry): void {
+    this.recognitionHistory.push(entry);
+    // Keep only last 20 entries
+    if (this.recognitionHistory.length > 20) {
+      this.recognitionHistory.shift();
+    }
   }
 
   reset(): void {

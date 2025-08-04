@@ -30,6 +30,7 @@ export interface RecognitionResult {
   offsetSeconds?: number;
   confidence: number;
   error?: string;
+  apiLatency?: number;
 }
 
 export interface LyricsChunk {

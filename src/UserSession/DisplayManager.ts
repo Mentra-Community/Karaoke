@@ -125,13 +125,18 @@ export class DisplayManager {
 
     const formattedText = lines.join('\n');
     
-    this.logger.debug({
-      appState: AppState[appState],
-      linesCount: lines.length,
-      hasCurrentChunk: !!currentChunk,
-      hasNextChunk: !!nextChunk
-    }, 'Using 5-line formatter');
+    // Only log when state changes or when displaying actual lyrics
+    if (appState === AppState.SONG_DETECTED_WITH_LYRICS || 
+        formattedText !== this.currentDisplay) {
+      this.logger.debug({
+        appState: AppState[appState],
+        linesCount: lines.length,
+        hasCurrentChunk: !!currentChunk,
+        hasNextChunk: !!nextChunk
+      }, 'Display state changed');
+    }
 
+    // note: this.updateDisplay already contains check to only update if text has changed.
     this.updateDisplay(formattedText);
   }
 }
