@@ -4,6 +4,10 @@
 
 This system provides real-time song recognition and synchronized lyric display for smart glasses using MentraOS. Users wearing smart glasses can see song information and synchronized lyrics for any music playing around them, creating an immersive karaoke experience.
 
+## 🚀 Current Status
+
+**Working!** The system successfully recognizes songs and displays lyrics on smart glasses. See [PROJECT_STATUS.md](./PROJECT_STATUS.md) for detailed implementation status, known issues, and next steps.
+
 ## Core Features
 
 1. **Real-time Audio Recognition** - Continuously identify songs from ambient audio
@@ -327,12 +331,41 @@ interface KaraokeConfig {
 }
 ```
 
-## Implementation Priority
+## Implementation Status
 
-1. **Phase 1**: Basic recognition + song info display
-2. **Phase 2**: LRC fetching + basic lyrics display  
-3. **Phase 3**: Smart chunking + position tracking
-4. **Phase 4**: History management + error handling
-5. **Phase 5**: Performance optimization + caching
+### ✅ Completed
+- **Phase 1**: Basic recognition + song info display
+- **Phase 2**: LRC fetching + basic lyrics display  
+- **Phase 3**: Basic chunking + position tracking (needs refinement)
+- **Phase 4**: History management + error handling (partial)
+
+### 🚧 In Progress
+- Smart chunking for 5-line display limit
+- Position recalibration
+- Song switching detection
+
+### 📋 Planned
+- **Phase 5**: Performance optimization + caching
+- Test suite with visual simulator
+- Intelligent LRC preprocessing
+
+## Quick Start
+
+1. Set environment variables:
+   ```bash
+   ACRCLOUD_HOST=identify-us-west-2.acrcloud.com
+   ACRCLOUD_ACCESS_KEY=your_key
+   ACRCLOUD_ACCESS_SECRET=your_secret
+   ```
+
+2. Install dependencies:
+   ```bash
+   bun install
+   ```
+
+3. Run the app:
+   ```bash
+   bun run dev
+   ```
 
 This system creates a seamless real-time karaoke experience where users can see synchronized lyrics for any song playing around them, with intelligent fallbacks and continuous accuracy improvements.
