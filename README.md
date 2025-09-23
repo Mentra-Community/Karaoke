@@ -1,89 +1,371 @@
-# MentraOS-Extended-Example-App
+# Real-time Karaoke System for Smart Glasses
 
-### Install MentraOS on your phone
+## Overview
 
-MentraOS install links: [mentra.glass/install](https://mentra.glass/install)
+This system provides real-time song recognition and synchronized lyric display for smart glasses using MentraOS. Users wearing smart glasses can see song information and synchronized lyrics for any music playing around them, creating an immersive karaoke experience.
 
-### (Easiest way to get started) Set up ngrok
+## 🚀 Current Status
 
-1. `brew install ngrok`
+**Working!** The system successfully recognizes songs and displays lyrics on smart glasses. See [PROJECT_STATUS.md](./PROJECT_STATUS.md) for detailed implementation status, known issues, and next steps.
 
-2. Make an ngrok account
+## Core Features
 
-3. [Use ngrok to make a static address/URL](https://dashboard.ngrok.com/)
+1. **Real-time Audio Recognition** - Continuously identify songs from ambient audio
+2. **Synchronized Lyrics Display** - Show timed lyrics chunked for smart glasses
+3. **Position Tracking** - Track current position in detected songs with error correction
+4. **Song History** - Maintain log of all identified songs
+5. **Fallback Display** - Show song info + timestamp when lyrics unavailable
 
-### Register your APP with MentraOS
+## Architecture
 
-<img width="181" alt="image" src="https://github.com/user-attachments/assets/36192c2b-e1ba-423b-90de-47ff8cd91318" />
+### Main Application Class
+```typescript
+class KaraokeApp extends AppServer {
+  private userSessions = new Map<string, UserSession>();
+  
+  // Handles new user connections, creates UserSession instances
+  protected async onSession(session: AppSession, sessionId: string, userId: string): Promise<void>
+  
+  // Cleanup when users disconnect
+  protected async onStop(sessionId: string, userId: string, reason: string): Promise<void>
+}
+```
 
-1. Navigate to [console.mentra.glass](https://console.mentra.glass/)
+### UserSession Class
+Each connected user gets an isolated UserSession containing all managers:
 
-2. Click "Sign In", and log in with the same account you're using for MentraOS
+```typescript
+class UserSession {
+  // Core identification
+  userId: string;
+  sessionId: string;
+  session: AppSession;  // MentraOS session for audio/display
+  
+  // State management
+  currentSong?: CurrentSong;
+  appState: AppState;
+  
+  // Managers (each handles specific functionality)
+  recognitionManager: RecognitionManager;
+  lyricsManager: LyricsManager;
+  positionTracker: PositionTracker;
+  displayManager: DisplayManager;
+  historyManager: HistoryManager;
+  
+  constructor(userId: string, sessionId: string, session: AppSession)
+  startListening(): void
+  cleanup(): void
+}
+```
 
-3. Click "Create App"
+## Core Types and Interfaces
 
-4. Set a unique package name like `com.yourName.yourAppName`
+```typescript
+enum AppState {
+  LISTENING,                    // Waiting for song detection
+  SONG_DETECTED_NO_LYRICS,     // Song found but no LRC available
+  SONG_DETECTED_WITH_LYRICS,   // Song found with synchronized lyrics
+  PROCESSING                   // Fetching lyrics/processing
+}
 
-5. For "Public URL", enter your Ngrok's static URL or the public URL of your server
+interface CurrentSong {
+  title: string;
+  artist: string;
+  album?: string;
+  duration: number;           // Total song length in seconds
+  detectedAt: number;         // Timestamp when first detected
+  hasLyrics: boolean;
+  lrcData?: LRCLine[];
+  confidence: number;         // Recognition confidence (0-1)
+}
 
-6. After the app is created, you will be given an API key. Copy this key and use it in the `.env` file below.
+interface LRCLine {
+  timestamp: number;          // Time in seconds
+  text: string;              // Lyric text
+  endTime?: number;          // Optional end time for line
+}
 
-7. You can now add settings and tools to your app via the MentraOS Developer Console.  Let's upload this example's `app_config.json` file by clicking the "Import app_config.json" button under **Configuration Management**:
+interface RecognitionResult {
+  title: string;
+  artist: string;
+  album?: string;
+  duration?: number;
+  offsetSeconds?: number;     // Where in song detection occurred
+  confidence: number;
+  error?: string;
+}
 
-    ![Import app config](https://github.com/user-attachments/assets/14736150-7f02-43db-8b29-bbe918a4086b)
+interface LyricsChunk {
+  lines: string[];           // Max 2 lines
+  startTime: number;         // When chunk should start displaying
+  endTime: number;           // When chunk should end
+  wordsPerLine: number[];    // Words count per line for validation
+}
 
-### Get your APP running!
+interface RecognitionPoint {
+  timestamp: number;         // When recognition occurred
+  detectedOffset: number;    // Where in song we detected
+  confidence: number;
+  apiLatency: number;        // How long API call took
+}
 
-1. [Install bun](https://bun.sh/docs/installation)
+interface SongHistoryEntry {
+  title: string;
+  artist: string;
+  album?: string;
+  identifiedAt: number;      // Timestamp
+  duration?: number;
+  confidence: number;
+}
+```
 
-2. Create a new repo from this template using the `Use this template` dropdown in the upper right or the following command: `gh repo create --template Mentra-Community/MentraOS-Extended-Example-App`
+## Manager Responsibilities
 
-    ![Create repo from template](https://github.com/user-attachments/assets/c10e14e8-2dc5-4dfa-adac-dd334c1b73a5)
+### RecognitionManager
+Handles continuous audio processing and ACRCloud integration:
 
-3. Clone your new repo locally: `git clone <your-repo-url>`
+```typescript
+class RecognitionManager {
+  private audioBuffer: Buffer[];
+  private isRecording: boolean;
+  private lastRecognitionTime: number;
+  private readonly RECOGNITION_INTERVAL = 12000; // 12 seconds between checks
+  private readonly AUDIO_BUFFER_DURATION = 8000; // 8 seconds of audio
+  
+  startListening(): void                          // Begin audio capture
+  processAudioChunk(audioData: Buffer): void      // Handle incoming audio
+  performRecognition(): Promise<RecognitionResult | null>  // Call ACRCloud
+  shouldRecognize(): boolean                      // Check if time for next recognition
+  reset(): void                                   // Clear buffers and state
+}
+```
 
-4. cd into your repo, then type `bun install`
+### LyricsManager
+Fetches and processes LRC files, chunks lyrics for display:
 
-5. Set up your environment variables:
-   * Create a `.env` file in the root directory by copying the example: `cp .env.example .env`
-   * Edit the `.env` file with your app details:
-     ```
-     PORT=3000
-     PACKAGE_NAME=com.yourName.yourAppName
-     MENTRAOS_API_KEY=your_api_key_from_console
-     ```
-   * Make sure the `PACKAGE_NAME` matches what you registered in the MentraOS Console
-   * Get your `MENTRAOS_API_KEY` from the MentraOS Developer Console
+```typescript
+class LyricsManager {
+  private cachedLRC = new Map<string, LRCLine[]>();
+  
+  fetchLyrics(song: CurrentSong): Promise<LRCLine[] | null>    // Get LRC from sources
+  chunkLyrics(lrcData: LRCLine[]): LyricsChunk[]              // Split into display chunks
+  getCurrentChunk(position: number): LyricsChunk | null        // Get chunk for current time
+  private parseLRC(lrcContent: string): LRCLine[]             // Parse LRC format
+  private smartChunk(lines: LRCLine[]): LyricsChunk[]         // Apply 8-word/60-char limits
+}
+```
 
-6. Run your app with `bun run dev`
+**Chunking Rules:**
+- Max 8 words per line
+- Max 60 characters per line  
+- Max 2 lines per chunk
+- Never break words in middle
+- If single word exceeds 60 chars, show on its own line
 
-7. To expose your app to the internet (and thus MentraOS) with ngrok, run: `ngrok http --url=<YOUR_NGROK_URL_HERE> 3000`
-    * `3000` is the port. It must match what is in the app config. For example, if you entered `port: 8080`, use `8080` for ngrok instead.
+### PositionTracker
+Tracks song position with continuous calibration:
 
+```typescript
+class PositionTracker {
+  private songStartTime?: number;
+  private detectedOffset?: number;
+  private recognitionHistory: RecognitionPoint[];
+  private estimatedDrift: number;
+  
+  startSong(detectedAt: number, songOffset: number, apiLatency: number): void
+  getCurrentPosition(): number                    // Current seconds into song
+  validatePosition(newOffset: number, detectionTime: number): boolean
+  recalibrate(newOffset: number, detectionTime: number): void
+  getConfidence(): number                         // How confident we are in timing
+  reset(): void
+}
+```
 
-### Next Steps
+**Position Calculation:**
+```
+current_position = (now - song_start_time) + detected_offset - estimated_drift
+```
 
-Check out the full documentation at [docs.mentra.glass](https://docs.mentra.glass/core-concepts)
+### DisplayManager
+Manages what appears on smart glasses:
 
-#### Subscribing to events
+```typescript
+class DisplayManager {
+  private currentDisplay: string;
+  private lastUpdateTime: number;
+  
+  showListening(): void                           // "♪ Listening..." state
+  showSongInfo(song: CurrentSong, position: number): void  // Song title/artist + timestamp
+  showLyrics(chunk: LyricsChunk): void           // Chunked lyrics display
+  showProcessing(): void                          // "Processing..." state
+  private formatSongInfo(song: CurrentSong, position: number): string
+  private formatLyrics(chunk: LyricsChunk): string
+}
+```
 
-You can listen for transcriptions, translations, settings updates, and other events within the onSession function.
+**Display Formats:**
+- **Listening**: `♪ Listening...`
+- **Song Info**: `♪ Bohemian Rhapsody\n  Queen\n  2:34 / 5:55`
+- **Lyrics**: `Is this the real life?\nIs this just fantasy?`
 
-#### Authenticated Webview
+### HistoryManager
+Tracks identified songs over time:
 
-The app can provide an authenticated webview endpoint for users:
+```typescript
+class HistoryManager {
+  private history: SongHistoryEntry[];
+  private readonly MAX_HISTORY_SIZE = 100;
+  
+  addSong(song: CurrentSong): void               // Add to history
+  getRecentSongs(limit?: number): SongHistoryEntry[]  // Get recent entries
+  isDuplicate(song: CurrentSong): boolean        // Check if song recently added
+  clearHistory(): void                           // Reset history
+  exportHistory(): string                        // JSON export of history
+}
+```
 
-- Access the webview at `/webview`
-- Authentication is handled automatically for MentraOS users
-- The current MentraOS user is available at request.authUserId
-- Create a web interface that allows users to interact with your app's functionality
+## External Services
 
-#### Tool Calls
+### ACRCloudService
+Wrapper for ACRCloud API calls:
 
-Your app can respond to tool calls via `handleToolCall` in your code:
+```typescript
+class ACRCloudService {
+  private host: string;
+  private accessKey: string;
+  private secretKey: string;
+  
+  recognize(audioBuffer: Buffer): Promise<RecognitionResult>
+  private buildSignature(timestamp: number): string
+  private createFormData(audioBuffer: Buffer, signature: string, timestamp: number): FormData
+}
+```
 
-- Define custom tools that can be called by MentraOS
-- Each tool takes specific parameters and returns a result
-- Tools can perform operations on your application's data
-- Properly handle authentication and validation in your tool implementations
+### LRCService
+Fetches LRC files from multiple sources:
 
+```typescript
+class LRCService {
+  private sources: LRCSource[];
+  
+  fetchLRC(title: string, artist: string): Promise<string | null>
+  private trySource(source: LRCSource, title: string, artist: string): Promise<string | null>
+}
+
+interface LRCSource {
+  name: string;
+  url: string;
+  searchEndpoint: string;
+  downloadEndpoint: string;
+}
+```
+
+## Audio Processing Flow
+
+1. **Audio Capture**: MentraOS streams audio chunks to RecognitionManager
+2. **Buffer Management**: Maintain 8-second rolling buffer of audio
+3. **Recognition Timing**: Perform recognition every 12 seconds
+4. **Result Processing**: Parse ACRCloud response, extract song metadata
+5. **State Update**: Update UserSession state, trigger appropriate actions
+
+## Lyrics Processing Flow
+
+1. **LRC Fetching**: Try multiple sources to find synchronized lyrics
+2. **Parsing**: Convert LRC format to internal LRCLine objects
+3. **Chunking**: Split lyrics into smart glasses friendly chunks
+4. **Synchronization**: Match chunks to current song position
+5. **Display**: Send formatted chunks to smart glasses
+
+## Position Tracking Flow
+
+1. **Initial Detection**: Record when song first detected + estimated offset
+2. **Continuous Validation**: Re-recognize every 12 seconds
+3. **Drift Calculation**: Compare predicted vs actual position
+4. **Recalibration**: Adjust timing if drift exceeds threshold (±3 seconds)
+5. **Confidence Scoring**: Weight recent recognitions more heavily
+
+## Error Handling
+
+### Recognition Errors
+- **No match found**: Continue listening, show "♪ Listening..."
+- **Low confidence**: Require multiple confirmations before state change
+- **API failure**: Retry with exponential backoff
+
+### Lyrics Errors
+- **No LRC available**: Fall back to song info + timestamp display
+- **Parse failure**: Log error, treat as no lyrics available
+- **Chunk timing issues**: Skip problematic chunks, continue with valid ones
+
+### Position Tracking Errors
+- **Negative position**: Reset to 0, recalibrate on next recognition
+- **Position beyond song**: Assume song ended, return to listening state
+- **Large drift**: Force recalibration, log for debugging
+
+## Performance Considerations
+
+- **Caching**: Cache LRC files to avoid repeated API calls
+- **Memory Management**: Limit audio buffer size, clear old data
+- **Rate Limiting**: Respect ACRCloud API limits
+- **Battery Optimization**: Efficient audio processing for mobile devices
+
+## Configuration
+
+```typescript
+interface KaraokeConfig {
+  recognition: {
+    intervalMs: 12000;        // Time between recognitions
+    bufferDurationMs: 8000;   // Audio buffer size
+    confidenceThreshold: 0.7; // Minimum confidence for recognition
+    maxDriftSeconds: 3;       // Max timing drift before recalibration
+  };
+  display: {
+    maxWordsPerLine: 8;
+    maxCharsPerLine: 60;
+    linesPerChunk: 2;
+    updateIntervalMs: 500;    // Display refresh rate
+  };
+  history: {
+    maxEntries: 100;
+    duplicateWindowMs: 30000; // Don't add same song within 30 seconds
+  };
+}
+```
+
+## Implementation Status
+
+### ✅ Completed
+- **Phase 1**: Basic recognition + song info display
+- **Phase 2**: LRC fetching + basic lyrics display  
+- **Phase 3**: Basic chunking + position tracking (needs refinement)
+- **Phase 4**: History management + error handling (partial)
+
+### 🚧 In Progress
+- Smart chunking for 5-line display limit
+- Position recalibration
+- Song switching detection
+
+### 📋 Planned
+- **Phase 5**: Performance optimization + caching
+- Test suite with visual simulator
+- Intelligent LRC preprocessing
+
+## Quick Start
+
+1. Set environment variables:
+   ```bash
+   ACRCLOUD_HOST=identify-us-west-2.acrcloud.com
+   ACRCLOUD_ACCESS_KEY=your_key
+   ACRCLOUD_ACCESS_SECRET=your_secret
+   ```
+
+2. Install dependencies:
+   ```bash
+   bun install
+   ```
+
+3. Run the app:
+   ```bash
+   bun run dev
+   ```
+
+This system creates a seamless real-time karaoke experience where users can see synchronized lyrics for any song playing around them, with intelligent fallbacks and continuous accuracy improvements.
