@@ -1,7 +1,7 @@
 import { AppServer, AppSession } from "@mentra/sdk";
-import { UserSession } from './UserSession';
-import { setupWebviewRoutes } from './webview';
-import dotenv from 'dotenv';
+import { UserSession } from "./UserSession";
+import { setupWebviewRoutes } from "./webview";
+import dotenv from "dotenv";
 // Load environment variables from .env file
 dotenv.config();
 
@@ -9,18 +9,19 @@ export class KaraokeApp extends AppServer {
   private userSessions = new Map<string, UserSession>();
 
   private acrConfig = {
-    host: process.env.ACRCLOUD_HOST || 'identify-us-west-2.acrcloud.com',
-    accessKey: process.env.ACRCLOUD_ACCESS_KEY || '',
-    secretKey: process.env.ACRCLOUD_ACCESS_SECRET || ''
+    host: process.env.ACRCLOUD_HOST || "identify-us-west-2.acrcloud.com",
+    accessKey: process.env.ACRCLOUD_ACCESS_KEY || "",
+    secretKey: process.env.ACRCLOUD_ACCESS_SECRET || "",
   };
 
   constructor() {
     super({
-      packageName: process.env.PACKAGE_NAME || 'com.mentra.karaoke',
-      apiKey: process.env.MENTRAOS_API_KEY || '',
-      port: parseInt(process.env.PORT || '3000'),
-      cookieSecret: process.env.COOKIE_SECRET || 'change-me-in-dotenv-please-32-chars-min',
-      publicDir: './public',
+      packageName: process.env.PACKAGE_NAME || "com.mentra.karaoke",
+      apiKey: process.env.MENTRAOS_API_KEY || "",
+      port: parseInt(process.env.PORT || "3000"),
+      cookieSecret:
+        process.env.COOKIE_SECRET || "change-me-in-dotenv-please-32-chars-min",
+      publicDir: "./public",
     });
     this.validateConfig();
     setupWebviewRoutes(this);
@@ -29,24 +30,24 @@ export class KaraokeApp extends AppServer {
   protected async onSession(
     session: AppSession,
     sessionId: string,
-    userId: string
+    userId: string,
   ): Promise<void> {
-    const logger = session.logger.child({ service: 'KaraokeApp' });
-    logger.info({ sessionId, userId }, 'New session started');
+    const logger = session.logger.child({ service: "KaraokeApp" });
+    logger.info({ sessionId, userId }, "New session started");
 
     const userSession = new UserSession(
       userId,
       sessionId,
       session,
-      this.acrConfig
+      this.acrConfig,
     );
 
     this.userSessions.set(sessionId, userSession);
-    
+
     userSession.startListening();
 
     this.addCleanupHandler(() => {
-      logger.info({ sessionId, userId }, 'Cleaning up session');
+      logger.info({ sessionId, userId }, "Cleaning up session");
       const session = this.userSessions.get(sessionId);
       if (session) {
         session.cleanup();
@@ -57,7 +58,9 @@ export class KaraokeApp extends AppServer {
 
   private validateConfig(): void {
     if (!this.acrConfig.accessKey || !this.acrConfig.secretKey) {
-      console.warn('ACRCloud credentials not configured. Please set ACRCLOUD_ACCESS_KEY and ACRCLOUD_ACCESS_SECRET environment variables.');
+      console.warn(
+        "ACRCloud credentials not configured. Please set ACRCLOUD_ACCESS_KEY and ACRCLOUD_ACCESS_SECRET environment variables.",
+      );
     }
   }
 
@@ -71,7 +74,9 @@ export class KaraokeApp extends AppServer {
   }
 
   getAllSessionStats(): any[] {
-    return Array.from(this.userSessions.values()).map(session => session.getStats());
+    return Array.from(this.userSessions.values()).map((session) =>
+      session.getStats(),
+    );
   }
 
   /**
@@ -96,9 +101,11 @@ export class KaraokeApp extends AppServer {
 const app = new KaraokeApp();
 app.start().catch(console.error);
 
-const port = parseInt(process.env.PORT || '3000');
+const port = parseInt(process.env.PORT || "3000");
 Bun.serve({
   port,
-  hostname: process.env.HOST || '0.0.0.0',
+  hostname: process.env.HOST || "0.0.0.0",
   fetch: app.fetch,
 });
+
+console.log("Karaoke running...");

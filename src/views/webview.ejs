@@ -33,8 +33,21 @@
                 <div class="np-meta">
                     <span id="song-position">0:00</span>
                     <span class="dot-sep">•</span>
+                    <span id="song-duration">0:00</span>
+                    <span class="dot-sep">•</span>
                     <span id="song-lyrics-flag">No lyrics</span>
                 </div>
+            </div>
+        </section>
+
+        <section class="lyrics" id="lyrics-section" hidden>
+            <p class="np-eyebrow">Lyrics</p>
+            <div class="lyrics-card">
+                <div class="lyrics-current" id="lyrics-current"></div>
+                <div class="lyrics-progress">
+                    <div class="lyrics-progress-bar" id="lyrics-progress-bar"></div>
+                </div>
+                <div class="lyrics-next" id="lyrics-next"></div>
             </div>
         </section>
 
@@ -64,7 +77,12 @@
         const songTitle = $("song-title");
         const songArtist = $("song-artist");
         const songPosition = $("song-position");
+        const songDuration = $("song-duration");
         const songLyricsFlag = $("song-lyrics-flag");
+        const lyricsSection = $("lyrics-section");
+        const lyricsCurrent = $("lyrics-current");
+        const lyricsNext = $("lyrics-next");
+        const lyricsProgressBar = $("lyrics-progress-bar");
         const historyList = $("history-list");
 
         const STATE_LABELS = {
@@ -108,8 +126,37 @@
             songTitle.textContent = song.title || "Unknown";
             songArtist.textContent = song.artist || "Unknown artist";
             songPosition.textContent = fmtTime(song.position);
+            songDuration.textContent = fmtTime(song.duration);
             songLyricsFlag.textContent = song.hasLyrics ? "Synced lyrics" : "No lyrics";
             songLyricsFlag.dataset.lyrics = song.hasLyrics ? "yes" : "no";
+        }
+
+        function applyLyrics(lyrics) {
+            // lyrics: { position, current: {lines, startTime, endTime} | null, next: {...} | null } | null
+            if (!lyrics || !lyrics.current) {
+                lyricsSection.hidden = true;
+                return;
+            }
+            lyricsSection.hidden = false;
+
+            const cur = lyrics.current;
+            lyricsCurrent.innerHTML = cur.lines
+                .map((line) => `<p class="lyrics-line">${escapeHtml(line) || "&nbsp;"}</p>`)
+                .join("");
+
+            if (lyrics.next && lyrics.next.lines.length > 0) {
+                lyricsNext.innerHTML = lyrics.next.lines
+                    .slice(0, 2)
+                    .map((line) => `<p class="lyrics-line-next">${escapeHtml(line) || "&nbsp;"}</p>`)
+                    .join("");
+            } else {
+                lyricsNext.innerHTML = "";
+            }
+
+            // Progress through the current chunk
+            const span = Math.max(0.01, cur.endTime - cur.startTime);
+            const through = Math.max(0, Math.min(1, (lyrics.position - cur.startTime) / span));
+            lyricsProgressBar.style.transform = `scaleX(${through})`;
         }
 
         function applyHistory(items) {
@@ -148,6 +195,7 @@
                 const data = await r.json();
                 applyState(data.connected ? data.state : "DISCONNECTED");
                 applySong(data.currentSong);
+                applyLyrics(data.lyrics);
                 applyHistory(data.history);
             } catch (_err) {
                 applyState("DISCONNECTED");

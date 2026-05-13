@@ -503,10 +503,34 @@ export class UserSession {
         title: this.currentSong.title,
         artist: this.currentSong.artist,
         position: this.positionTracker.getCurrentPosition(),
+        duration: this.currentSong.duration,
         hasLyrics: this.currentSong.hasLyrics
       } : null,
       history: this.historyManager.getStatistics(),
       cacheSize: this.lyricsManager.getCacheSize()
+    };
+  }
+
+  /**
+   * Current playback position + currently-active and upcoming lyrics
+   * chunks. Used by the webview to mirror what the glasses HUD is
+   * showing.
+   */
+  getLiveLyrics(): {
+    position: number;
+    current: {lines: string[]; startTime: number; endTime: number} | null;
+    next: {lines: string[]; startTime: number; endTime: number} | null;
+  } | null {
+    if (this.appState !== AppState.SONG_DETECTED_WITH_LYRICS || !this.currentSong) {
+      return null;
+    }
+    const position = this.positionTracker.getCurrentPosition();
+    const current = this.lyricsManager.getCurrentChunk(position);
+    const next = this.lyricsManager.getNextChunk(position);
+    return {
+      position,
+      current: current ? {lines: current.lines, startTime: current.startTime, endTime: current.endTime} : null,
+      next: next ? {lines: next.lines, startTime: next.startTime, endTime: next.endTime} : null,
     };
   }
 }

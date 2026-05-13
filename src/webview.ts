@@ -46,6 +46,7 @@ export function setupWebviewRoutes(app: KaraokeApp): void {
         connected: false,
         state: "DISCONNECTED",
         currentSong: null,
+        lyrics: null,
         history: [],
       })
     }
@@ -57,6 +58,7 @@ export function setupWebviewRoutes(app: KaraokeApp): void {
       connected: true,
       state: stats.currentState,
       currentSong: stats.currentSong,
+      lyrics: session.getLiveLyrics(),
       history: recent.map((h) => ({
         title: h.title,
         artist: h.artist,
