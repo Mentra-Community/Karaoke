@@ -55,7 +55,9 @@ export class LyricsManager {
   }
 
   chunkLyrics(lrcData: LRCLine[]): LyricsChunk[] {
-    return chunkLyrics(lrcData, 8, 60, 2);
+    // Pixel-accurate wrapping via display-utils. Defaults to G1_PROFILE
+    // (576px / 5 lines) and word-boundary breaks.
+    return chunkLyrics(lrcData, {maxLinesPerChunk: 2, breakMode: "word"});
   }
 
   getCurrentChunk(position: number): LyricsChunk | null {

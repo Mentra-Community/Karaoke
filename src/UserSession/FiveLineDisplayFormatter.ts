@@ -1,3 +1,4 @@
+import {TextMeasurer, TextWrapper, G1_PROFILE} from '../utils/displayUtils';
 import { CurrentSong, LyricsChunk, AppState } from '../types';
 import { formatTimestamp } from '../utils/lrcParser';
 
@@ -8,7 +9,17 @@ export interface DisplayLine {
 
 export class FiveLineDisplayFormatter {
   private readonly MAX_LINES = 5;
-  private readonly MAX_CHARS = 45;
+
+  // Pixel-accurate width budget for the G1 HUD (576px). Used for any
+  // ad-hoc per-line measurement we still do in this file (the song
+  // info screen and the next-chunk preview truncation). Lyric chunks
+  // themselves are pre-wrapped by textChunker.
+  private readonly measurer = new TextMeasurer(G1_PROFILE);
+  private readonly wrapper = new TextWrapper(this.measurer, {
+    breakMode: 'word',
+    hyphenChar: '-',
+  });
+  private readonly displayWidthPx = G1_PROFILE.displayWidthPx;
 
   formatDisplay(
     appState: AppState,
@@ -61,14 +72,14 @@ export class FiveLineDisplayFormatter {
     const lines: string[] = [];
     
     // Line 1: Song title
-    lines.push(this.truncate(`♪ ${song.title}`));
+    lines.push(this.fitOneLine(`♪ ${song.title}`));
     
     // Line 2: Artist
-    lines.push(this.truncate(`  ${song.artist}`));
+    lines.push(this.fitOneLine(`  ${song.artist}`));
     
     // Line 3: Album (if available)
     if (song.album) {
-      lines.push(this.truncate(`  ${song.album}`));
+      lines.push(this.fitOneLine(`  ${song.album}`));
     } else {
       lines.push('');
     }
@@ -90,68 +101,61 @@ export class FiveLineDisplayFormatter {
     position: number = 0
   ): string[] {
     const lines: string[] = [];
-    
+
     if (!currentChunk) {
       // No current chunk, show song info
       return this.formatSongInfo(song, position);
     }
-    
-    // Strategy: Show current lyrics with minimal header
+
+    // The chunker already wrapped these lines pixel-accurately for the
+    // G1's display width — pass them through verbatim. We just decide
+    // how many to show and what to put in the rest of the slots.
     const hasMultipleLines = currentChunk.lines.length > 1;
-    const showTimeOnBottom = true;
-    
+
     if (hasMultipleLines) {
-      // Two line chunk - use most space for lyrics
-      lines.push(this.truncate(currentChunk.lines[0]));
-      lines.push(this.truncate(currentChunk.lines[1]));
+      // Two-line chunk: most of the screen real estate goes to lyrics.
+      lines.push(currentChunk.lines[0]);
+      lines.push(currentChunk.lines[1]);
       lines.push('-----');
-      
-      // Show next preview if available
+
       if (nextChunk && nextChunk.lines.length > 0) {
-        const preview = this.truncate(nextChunk.lines[0]);
-        lines.push(preview.length > 42 ? preview.substring(0, 39) + '...' : preview);
+        lines.push(this.fitOneLine(nextChunk.lines[0]));
       } else {
         lines.push('');
       }
-      
-      // Time at bottom
-      lines.push(`${formatTimestamp(position)} / ${formatTimestamp(song.duration)}`);
     } else {
-      // Single line chunk - add more context
-      lines.push(this.truncate(currentChunk.lines[0]));
+      // Single-line chunk: leave the next-line slot blank so it doesn't
+      // crowd the active lyric, and use the bottom rows for preview.
+      lines.push(currentChunk.lines[0]);
       lines.push('');
-      
-      // Show next chunk preview
+
       if (nextChunk) {
         lines.push('-----');
-        const preview = this.truncate(nextChunk.lines[0]);
-        lines.push(preview.length > 42 ? preview.substring(0, 39) + '...' : preview);
+        lines.push(this.fitOneLine(nextChunk.lines[0]));
       } else {
         lines.push('');
         lines.push('');
       }
-      
-      // Time at bottom
-      lines.push(`${formatTimestamp(position)} / ${formatTimestamp(song.duration)}`);
     }
-    
+
+    // Bottom row: time / duration
+    lines.push(`${formatTimestamp(position)} / ${formatTimestamp(song.duration)}`);
     return lines;
   }
 
-  private truncate(text: string): string {
-    if (text.length <= this.MAX_CHARS) {
-      return text;
-    }
-    
-    // Try to break at word boundary
-    const truncated = text.substring(0, this.MAX_CHARS - 3);
-    const lastSpace = truncated.lastIndexOf(' ');
-    
-    if (lastSpace > this.MAX_CHARS - 10) {
-      return truncated.substring(0, lastSpace) + '...';
-    }
-    
-    return truncated + '...';
+  /**
+   * Pixel-accurate single-line fit for the next-chunk preview slot.
+   * If the line overflows the HUD width, wrap and take just the first
+   * line so it doesn't bleed into the time/separator rows.
+   */
+  private fitOneLine(text: string): string {
+    if (!text) return '';
+    const result = this.wrapper.wrap(text, {
+      maxWidthPx: this.displayWidthPx,
+      maxLines: 1,
+      maxBytes: Infinity,
+    });
+    return result.lines[0] ?? text;
   }
 
   // Alternative format for instrumental breaks
@@ -180,7 +184,7 @@ export class FiveLineDisplayFormatter {
     
     // Previous context (if available)
     if (previousLine) {
-      const truncated = this.truncate('... ' + previousLine);
+      const truncated = this.fitOneLine('... ' + previousLine);
       lines.push(truncated);
     } else {
       lines.push('');
@@ -189,10 +193,10 @@ export class FiveLineDisplayFormatter {
     // Current lyrics
     if (currentChunk) {
       if (currentChunk.lines.length === 2) {
-        lines.push(this.truncate(currentChunk.lines[0]));
-        lines.push(this.truncate(currentChunk.lines[1]));
+        lines.push(this.fitOneLine(currentChunk.lines[0]));
+        lines.push(this.fitOneLine(currentChunk.lines[1]));
       } else {
-        lines.push(this.truncate(currentChunk.lines[0]));
+        lines.push(this.fitOneLine(currentChunk.lines[0]));
         lines.push('');
       }
     } else {
@@ -202,7 +206,7 @@ export class FiveLineDisplayFormatter {
     
     // Next preview (if room)
     if (lines.length < this.MAX_LINES && nextChunk) {
-      const preview = this.truncate(nextChunk.lines[0] + ' ...');
+      const preview = this.fitOneLine(nextChunk.lines[0] + ' ...');
       lines.push(preview);
     }
     
