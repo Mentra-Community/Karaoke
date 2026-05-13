@@ -13,6 +13,8 @@
  *   POST /api/resync       Force an immediate ACR re-recognition.
  *   GET  /api/versions     LRClib alternatives for the current song.
  *   POST /api/lrc          Switch active LRC. Body: {lrcId: number}.
+ *   POST /api/lyrics-offset  Nudge or set the lyric/audio offset.
+ *                          Body: {delta?: number, absolute?: number}.
  *   GET  /api/display-log  Plain-text HUD frame audit (debug only).
  *
  * All routes read `authUserId` from the Hono context variables that
@@ -163,6 +165,35 @@ export function setupWebviewRoutes(app: KaraokeApp): void {
     const ok = await session.switchLRCVersion(lrcId)
     if (!ok) return c.json({error: "Could not load that LRC version"}, 422)
     return c.json({lrcId, switched: true})
+  })
+
+  // Nudge the lyric-vs-audio offset by N seconds. Body: {delta}.
+  // Positive delta = lyrics shown earlier (pull lyrics ahead).
+  // Negative = lyrics shown later (push lyrics behind).
+  app.post("/api/lyrics-offset", async (c: MentraAuthHonoContext) => {
+    const userId = c.get("authUserId")
+    if (!userId) return c.json({error: "Not authenticated"}, 401)
+    const session = app.getSessionByUserId(userId)
+    if (!session) return c.json({error: "No active session"}, 404)
+
+    let body: {delta?: unknown; absolute?: unknown}
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({error: "Invalid JSON body"}, 400)
+    }
+
+    if (body.absolute !== undefined) {
+      const v = Number(body.absolute)
+      if (!Number.isFinite(v)) return c.json({error: "absolute must be a number"}, 400)
+      session.lyricsOffsetSeconds = Math.max(-30, Math.min(30, v))
+      return c.json({offset: session.lyricsOffsetSeconds})
+    }
+
+    const delta = Number(body.delta)
+    if (!Number.isFinite(delta)) return c.json({error: "delta must be a number"}, 400)
+    const next = session.nudgeLyricsOffset(delta)
+    return c.json({offset: next})
   })
 
   // Audit log of every frame pushed to the glasses HUD. Plain text,

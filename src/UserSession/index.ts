@@ -23,7 +23,20 @@ export class UserSession {
   
   currentSong?: CurrentSong;
   appState: AppState = AppState.LISTENING;
-  
+
+  /**
+   * User-driven correction applied to the LRC lookup position, in
+   * seconds. Positive value = lyrics shown are AHEAD of where our
+   * tracker thinks playback is (useful when the cut has extra intro
+   * padding and lyrics lag the audio). Negative = lyrics behind.
+   *
+   * Only affects which chunk we treat as "current" for display —
+   * the time clock on the HUD/webview keeps showing the real
+   * playback position. Resets to 0 every time a new song is
+   * detected (per-song persistence is a follow-up).
+   */
+  lyricsOffsetSeconds: number = 0;
+
   recognitionManager: RecognitionManager;
   lyricsManager: LyricsManager;
   positionTracker: PositionTracker;
@@ -291,6 +304,7 @@ export class UserSession {
     };
 
     this.currentSong = newSong;
+    this.lyricsOffsetSeconds = 0; // fresh song → start from no offset
     this.historyManager.addSong(newSong);
 
     // Fire-and-forget album art lookup. The webview reads via
@@ -362,10 +376,15 @@ export class UserSession {
     const renderState = songOver ? AppState.LISTENING : this.appState;
     const renderSong = songOver ? undefined : this.currentSong;
 
+    // Shift the LRC lookup by the user's manual nudge — keeps the
+    // displayed clock honest (real playback) while letting the user
+    // correct cuts ACR can't auto-align (extended intros, slow
+    // builds, alternate cuts ACR fingerprinted as canonical).
+    const lookupPos = position + this.lyricsOffsetSeconds;
     const inLyrics = renderSong && renderState === AppState.SONG_DETECTED_WITH_LYRICS;
-    const currentChunk = inLyrics ? this.lyricsManager.getCurrentChunk(position) : null;
-    const nextChunk = inLyrics ? this.lyricsManager.getNextChunk(position) : null;
-    const previousChunk = inLyrics ? this.lyricsManager.getPreviousChunk(position) : null;
+    const currentChunk = inLyrics ? this.lyricsManager.getCurrentChunk(lookupPos) : null;
+    const nextChunk = inLyrics ? this.lyricsManager.getNextChunk(lookupPos) : null;
+    const previousChunk = inLyrics ? this.lyricsManager.getPreviousChunk(lookupPos) : null;
 
     this.displayManager.displayFormatted(
       renderState,
@@ -692,6 +711,7 @@ export class UserSession {
         duration: song.duration,
         hasLyrics: song.hasLyrics,
         lyricsLoading: song.lyricsLoading,
+        lyricsOffsetSeconds: this.lyricsOffsetSeconds,
         artworkUrl: this.artworkService.peek(song.title, song.artist) ?? null,
         lrcId: this.lyricsManager.getCurrentLRCId(),
       } : null,
@@ -714,12 +734,24 @@ export class UserSession {
       return null;
     }
     const position = this.positionTracker.getCurrentPosition();
-    const current = this.lyricsManager.getCurrentChunk(position);
-    const next = this.lyricsManager.getNextChunk(position);
+    const lookupPos = position + this.lyricsOffsetSeconds;
+    const current = this.lyricsManager.getCurrentChunk(lookupPos);
+    const next = this.lyricsManager.getNextChunk(lookupPos);
     return {
       position,
       current: current ? {lines: current.lines, startTime: current.startTime, endTime: current.endTime} : null,
       next: next ? {lines: next.lines, startTime: next.startTime, endTime: next.endTime} : null,
     };
+  }
+
+  /**
+   * Adjust the lyric-vs-audio offset by `deltaSeconds`. Positive
+   * pushes lyrics ahead (use when lyrics are lagging the audio).
+   * Returns the new total offset.
+   */
+  nudgeLyricsOffset(deltaSeconds: number): number {
+    this.lyricsOffsetSeconds = Math.max(-30, Math.min(30, this.lyricsOffsetSeconds + deltaSeconds));
+    this.logger.info({offset: this.lyricsOffsetSeconds, delta: deltaSeconds}, 'Lyrics offset nudged');
+    return this.lyricsOffsetSeconds;
   }
 }

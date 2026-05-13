@@ -85,6 +85,18 @@
                     </button>
                     <button class="text-btn" id="versions-btn">Wrong version?</button>
                 </div>
+
+                <!-- Lyric/audio offset nudge. Each tap shifts the LRC
+                     lookup by ±1 / ±5 seconds. The middle button shows
+                     the active offset and resets to 0 when tapped. -->
+                <div class="np-nudge" id="np-nudge" hidden>
+                    <span class="nudge-label">Lyrics</span>
+                    <button class="nudge-btn" data-delta="-5" title="Push lyrics 5s later">−5s</button>
+                    <button class="nudge-btn" data-delta="-1" title="Push lyrics 1s later">−1s</button>
+                    <button class="nudge-zero" id="nudge-zero" title="Reset offset to 0">0.0s</button>
+                    <button class="nudge-btn" data-delta="1" title="Pull lyrics 1s earlier">+1s</button>
+                    <button class="nudge-btn" data-delta="5" title="Pull lyrics 5s earlier">+5s</button>
+                </div>
             </section>
 
             <section class="lyrics" id="lyrics-section" hidden>
@@ -162,6 +174,8 @@
         const npArt = $("np-art");
         const npArtPlaceholder = $("np-art-placeholder");
         const npActions = $("np-actions");
+        const npNudge = $("np-nudge");
+        const nudgeZero = $("nudge-zero");
         const resyncBtn = $("resync-btn");
         const resyncLabel = $("resync-label");
         const versionsBtn = $("versions-btn");
@@ -246,6 +260,7 @@
                 npEmpty.hidden = false;
                 npActive.hidden = true;
                 npActions.hidden = true;
+                npNudge.hidden = true;
                 currentSongRef = null;
                 songFavBtn.hidden = true;
                 return;
@@ -253,6 +268,9 @@
             npEmpty.hidden = true;
             npActive.hidden = false;
             npActions.hidden = false;
+            // Nudge cluster is only useful when we actually have synced
+            // lyrics loaded — no point shifting an offset against nothing.
+            npNudge.hidden = !song.hasLyrics;
             songTitle.textContent = song.title || "Unknown";
             songArtist.textContent = song.artist || "Unknown artist";
             songPosition.textContent = fmtTime(song.position);
@@ -270,6 +288,12 @@
             }
             currentSongRef = {title: song.title, artist: song.artist};
             songFavBtn.hidden = false;
+
+            // Reflect the server-side lyrics offset on the middle nudge button.
+            const off = typeof song.lyricsOffsetSeconds === "number" ? song.lyricsOffsetSeconds : 0;
+            const sign = off > 0 ? "+" : off < 0 ? "−" : "";
+            nudgeZero.textContent = `${sign}${Math.abs(off).toFixed(1)}s`;
+            nudgeZero.dataset.zero = off === 0 ? "yes" : "no";
 
             // Album artwork
             if (song.artworkUrl) {
@@ -489,6 +513,35 @@
             triggerRecognize("Resyncing…", resyncBtn, resyncLabel, "Resync"));
         detectNowBtn.addEventListener("click", () =>
             triggerRecognize("Listening…", detectNowBtn, detectNowLabel, "Detect now"));
+
+        // ─── Lyrics nudge ────────────────────────────────────────────
+        async function setOffset(body) {
+            try {
+                const r = await fetch("/api/lyrics-offset", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    credentials: "include",
+                    body: JSON.stringify(body),
+                });
+                if (!r.ok) return;
+                const data = await r.json();
+                if (typeof data.offset === "number") {
+                    const off = data.offset;
+                    const sign = off > 0 ? "+" : off < 0 ? "−" : "";
+                    nudgeZero.textContent = `${sign}${Math.abs(off).toFixed(1)}s`;
+                    nudgeZero.dataset.zero = off === 0 ? "yes" : "no";
+                }
+            } catch (_) {}
+        }
+        npNudge.addEventListener("click", (ev) => {
+            const btn = ev.target.closest(".nudge-btn");
+            if (btn) {
+                const delta = parseFloat(btn.dataset.delta);
+                if (Number.isFinite(delta)) setOffset({delta});
+                return;
+            }
+            if (ev.target === nudgeZero) setOffset({absolute: 0});
+        });
 
         // ─── Wrong version? sheet ────────────────────────────────────
         function openSheet() {
