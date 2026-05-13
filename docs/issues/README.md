@@ -18,6 +18,7 @@ docs show why.
 | 004 | Fresh-detection window (45s tight cadence after confirm) | landed |
 | 005 | Persistent history + favorites                         | landed |
 | 006 | End-of-song HUD clear + alert mode                     | landed |
+| 007 | Cloud storage workaround (SDK URL bug)                 | landed |
 
 ## When to add one
 

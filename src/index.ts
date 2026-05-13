@@ -40,6 +40,10 @@ export class KaraokeApp extends AppServer {
       sessionId,
       session,
       this.acrConfig,
+      {
+        packageName: process.env.PACKAGE_NAME || 'com.mentra.karaoke',
+        apiKey: process.env.MENTRAOS_API_KEY || '',
+      },
     );
 
     this.userSessions.set(sessionId, userSession);
