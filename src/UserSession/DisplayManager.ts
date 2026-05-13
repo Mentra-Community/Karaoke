@@ -1,29 +1,21 @@
 import { AppSession } from '@mentra/sdk';
+import * as fs from 'fs';
 import { CurrentSong, LyricsChunk, AppState } from '../types';
 import { formatTimestamp } from '../utils/lrcParser';
 import { FiveLineDisplayFormatter } from './FiveLineDisplayFormatter';
 
 /**
- * One frame in the audit log of what the glasses HUD has shown. We
- * record on every actual text change (deduped) so the webview can
- * replay the sequence and we can see where the formatter / position
- * sync is doing the wrong thing.
+ * Where the audit log of glasses HUD frames gets appended.
+ * One entry per text change. Plain text, greppable, intended for
+ * after-the-fact debugging not UI.
+ *
+ * Curl it from a running app via GET /api/display-log.
  */
-export interface DisplayHistoryEntry {
-  /** epoch ms when the frame was pushed to the glasses */
+const DISPLAY_LOG_PATH = './display-log.txt';
+
+interface PreviousFrameMeta {
   at: number;
-  /** full multi-line text that was sent */
   text: string;
-  /** split lines for convenience in the UI */
-  lines: string[];
-  /** app state at the time the frame was emitted */
-  appState: string;
-  /** current song position in seconds (0 if no song) */
-  position: number;
-  /** title/artist of the active song, null when listening */
-  song: {title: string; artist: string; duration: number} | null;
-  /** how long this frame stayed on screen before the next change (filled in retroactively) */
-  durationMs?: number;
 }
 
 export class DisplayManager {
@@ -35,8 +27,7 @@ export class DisplayManager {
   private formatter: FiveLineDisplayFormatter;
   private useNewFormatter: boolean = true; // Feature flag
 
-  private history: DisplayHistoryEntry[] = [];
-  private readonly HISTORY_CAP = 500;
+  private previousFrame: PreviousFrameMeta | null = null;
 
   constructor(session: AppSession) {
     this.session = session;
@@ -117,10 +108,18 @@ export class DisplayManager {
   }
 
   /**
-   * Append one frame to the audit history. Called by displayFormatted
-   * with the full state context so the webview can replay what the
-   * glasses were showing and at what timing. Dedupes on identical
-   * text. Closes out the previous entry's durationMs.
+   * Append one frame to ./display-log.txt for after-the-fact audit.
+   * Dedupes on identical text. Records how long the previous frame
+   * stayed on screen.
+   *
+   * Format (per frame):
+   *
+   *   [ISO timestamp]  +<duration>ms  <APP_STATE>  pos=<m:ss>/<m:ss>  song="Title — Artist"
+   *   | line 1 of the HUD
+   *   | line 2
+   *   | ...
+   *
+   * Plain text so it greps cleanly. Newlines between frames.
    */
   private recordDisplayFrame(
     text: string,
@@ -129,43 +128,28 @@ export class DisplayManager {
     position: number,
     song: CurrentSong | undefined,
   ): void {
-    const last = this.history[this.history.length - 1];
-    if (last && last.text === text) {
-      // No change — extend the previous frame's duration on read instead.
+    if (this.previousFrame && this.previousFrame.text === text) {
+      // No actual change — skip. Previous frame's durationMs grows.
       return;
     }
     const now = Date.now();
-    if (last) last.durationMs = now - last.at;
+    const durationMs = this.previousFrame ? now - this.previousFrame.at : 0;
 
-    this.history.push({
-      at: now,
-      text,
-      lines,
-      appState: AppState[appState],
-      position,
-      song: song ? {title: song.title, artist: song.artist, duration: song.duration} : null,
+    const songStr = song
+      ? `song="${song.title.replace(/"/g, '\\"')} — ${song.artist.replace(/"/g, '\\"')}"`
+      : 'song=none';
+    const posStr = song
+      ? `pos=${formatTimestamp(position)}/${formatTimestamp(song.duration)}`
+      : 'pos=-';
+    const header = `[${new Date(now).toISOString()}]  +${durationMs}ms  ${AppState[appState]}  ${posStr}  ${songStr}`;
+    const body = lines.map((l) => `| ${l}`).join('\n');
+    const block = header + '\n' + body + '\n\n';
+
+    fs.appendFile(DISPLAY_LOG_PATH, block, (err) => {
+      if (err) this.logger.warn({err: err.message}, 'Failed to append display-log.txt');
     });
 
-    if (this.history.length > this.HISTORY_CAP) {
-      this.history.splice(0, this.history.length - this.HISTORY_CAP);
-    }
-  }
-
-  /**
-   * Return the last `limit` frames. Latest is at the end. Read-only
-   * snapshot (callers don't mutate the internal buffer).
-   */
-  getDisplayHistory(limit = 50): DisplayHistoryEntry[] {
-    const slice = this.history.slice(-limit);
-    // Patch the running-frame's durationMs so the UI can render an
-    // "active" frame without waiting for the next change.
-    if (slice.length > 0) {
-      const last = slice[slice.length - 1];
-      if (last.durationMs === undefined) {
-        slice[slice.length - 1] = {...last, durationMs: Date.now() - last.at};
-      }
-    }
-    return slice;
+    this.previousFrame = {at: now, text};
   }
 
   getCurrentDisplay(): string {

@@ -48,7 +48,6 @@ export function setupWebviewRoutes(app: KaraokeApp): void {
         currentSong: null,
         lyrics: null,
         history: [],
-        displayHistory: [],
       })
     }
 
@@ -65,7 +64,21 @@ export function setupWebviewRoutes(app: KaraokeApp): void {
         artist: h.artist,
         identifiedAt: h.identifiedAt,
       })),
-      displayHistory: session.getDisplayHistory(40),
     })
+  })
+
+  // Audit log of every frame pushed to the glasses HUD. Plain text,
+  // append-only. Useful for diagnosing chunk timing / formatter
+  // choices after the fact.
+  //
+  //   curl https://<your-app>/api/display-log -o display-log.txt
+  app.get("/api/display-log", async (c: MentraAuthHonoContext) => {
+    if (!c.get("authUserId")) return c.text("Not authenticated", 401)
+    try {
+      const text = await Bun.file("./display-log.txt").text()
+      return c.text(text)
+    } catch {
+      return c.text("(no frames recorded yet)\n")
+    }
   })
 }

@@ -7,6 +7,7 @@ import { DisplayManager } from './DisplayManager';
 import { HistoryManager } from './HistoryManager';
 import { ACRCloudService } from '../services/ACRCloudService';
 import { LRCService } from '../services/LRCService';
+import { ArtworkService } from '../services/ArtworkService';
 import { 
   RecognitionState, 
   PendingRecognition, 
@@ -31,6 +32,7 @@ export class UserSession {
 
   private acrService: ACRCloudService;
   private lrcService: LRCService;
+  private artworkService: ArtworkService;
   private logger: AppSession['logger'];
   private verificationTimer?: NodeJS.Timeout;
   private config: RecognitionConfig = DEFAULT_RECOGNITION_CONFIG;
@@ -54,6 +56,7 @@ export class UserSession {
       acrConfig.secretKey
     );
     this.lrcService = new LRCService();
+    this.artworkService = new ArtworkService();
 
     this.recognitionManager = new RecognitionManager(
       this.acrService,
@@ -216,6 +219,11 @@ export class UserSession {
 
     this.currentSong = newSong;
     this.historyManager.addSong(newSong);
+
+    // Fire-and-forget album art lookup. The webview reads via
+    // ArtworkService.peek() in getStats(), so it'll be visible on the
+    // next poll tick once iTunes responds (typically <500ms).
+    this.artworkService.fetchArtwork(newSong.title, newSong.artist).catch(() => {});
 
     if (result.offsetSeconds !== undefined) {
       this.positionTracker.startSong(
@@ -495,29 +503,22 @@ export class UserSession {
   }
 
   getStats(): any {
+    const song = this.currentSong;
     return {
       userId: this.userId,
       sessionId: this.sessionId,
       currentState: AppState[this.appState],
-      currentSong: this.currentSong ? {
-        title: this.currentSong.title,
-        artist: this.currentSong.artist,
+      currentSong: song ? {
+        title: song.title,
+        artist: song.artist,
         position: this.positionTracker.getCurrentPosition(),
-        duration: this.currentSong.duration,
-        hasLyrics: this.currentSong.hasLyrics
+        duration: song.duration,
+        hasLyrics: song.hasLyrics,
+        artworkUrl: this.artworkService.peek(song.title, song.artist) ?? null,
       } : null,
       history: this.historyManager.getStatistics(),
       cacheSize: this.lyricsManager.getCacheSize()
     };
-  }
-
-  /**
-   * Audit log of frames that have been shown on the glasses HUD.
-   * Latest at the end. Used by the webview to let us debug timing and
-   * formatter behavior after the fact.
-   */
-  getDisplayHistory(limit?: number) {
-    return this.displayManager.getDisplayHistory(limit);
   }
 
   /**

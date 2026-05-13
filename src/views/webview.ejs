@@ -21,21 +21,31 @@
 
         <section class="now-playing" id="now-playing">
             <div class="np-empty" id="np-empty">
-                <div class="ear">👂</div>
-                <p class="np-title">Listening for a song…</p>
+                <svg class="np-empty-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z" />
+                </svg>
+                <p class="np-title">Listening for a song</p>
                 <p class="np-sub">Play any track nearby and we'll catch the lyrics.</p>
             </div>
 
             <div class="np-active" id="np-active" hidden>
-                <p class="np-eyebrow">Now Playing</p>
-                <h2 class="np-title" id="song-title">—</h2>
-                <p class="np-artist" id="song-artist">—</p>
-                <div class="np-meta">
-                    <span id="song-position">0:00</span>
-                    <span class="dot-sep">•</span>
-                    <span id="song-duration">0:00</span>
-                    <span class="dot-sep">•</span>
-                    <span id="song-lyrics-flag">No lyrics</span>
+                <img class="np-art" id="np-art" alt="" hidden>
+                <div class="np-art-placeholder" id="np-art-placeholder">
+                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z" />
+                    </svg>
+                </div>
+                <div class="np-text">
+                    <p class="np-eyebrow">Now Playing</p>
+                    <h2 class="np-title" id="song-title">—</h2>
+                    <p class="np-artist" id="song-artist">—</p>
+                    <div class="np-meta">
+                        <span id="song-position">0:00</span>
+                        <span class="dot-sep">•</span>
+                        <span id="song-duration">0:00</span>
+                        <span class="dot-sep">•</span>
+                        <span id="song-lyrics-flag">No lyrics</span>
+                    </div>
                 </div>
             </div>
         </section>
@@ -49,18 +59,6 @@
                 </div>
                 <div class="lyrics-next" id="lyrics-next"></div>
             </div>
-        </section>
-
-        <section class="display-log">
-            <details>
-                <summary>
-                    <span class="display-log-title">Display log</span>
-                    <span class="display-log-sub" id="display-log-count">0 frames</span>
-                </summary>
-                <ol class="display-log-list" id="display-log-list">
-                    <li class="display-log-empty">Nothing on screen yet.</li>
-                </ol>
-            </details>
         </section>
 
         <section class="history">
@@ -91,12 +89,12 @@
         const songPosition = $("song-position");
         const songDuration = $("song-duration");
         const songLyricsFlag = $("song-lyrics-flag");
+        const npArt = $("np-art");
+        const npArtPlaceholder = $("np-art-placeholder");
         const lyricsSection = $("lyrics-section");
         const lyricsCurrent = $("lyrics-current");
         const lyricsNext = $("lyrics-next");
         const lyricsProgressBar = $("lyrics-progress-bar");
-        const displayLogList = $("display-log-list");
-        const displayLogCount = $("display-log-count");
         const historyList = $("history-list");
 
         const STATE_LABELS = {
@@ -143,6 +141,26 @@
             songDuration.textContent = fmtTime(song.duration);
             songLyricsFlag.textContent = song.hasLyrics ? "Synced lyrics" : "No lyrics";
             songLyricsFlag.dataset.lyrics = song.hasLyrics ? "yes" : "no";
+
+            // Album artwork — hide placeholder if the image loads, swap
+            // back if it fails or no URL is set.
+            if (song.artworkUrl) {
+                if (npArt.src !== song.artworkUrl) {
+                    npArt.onerror = () => {
+                        npArt.hidden = true;
+                        npArtPlaceholder.hidden = false;
+                    };
+                    npArt.onload = () => {
+                        npArt.hidden = false;
+                        npArtPlaceholder.hidden = true;
+                    };
+                    npArt.src = song.artworkUrl;
+                }
+            } else {
+                npArt.hidden = true;
+                npArt.removeAttribute("src");
+                npArtPlaceholder.hidden = false;
+            }
         }
 
         function applyLyrics(lyrics) {
@@ -171,52 +189,6 @@
             const span = Math.max(0.01, cur.endTime - cur.startTime);
             const through = Math.max(0, Math.min(1, (lyrics.position - cur.startTime) / span));
             lyricsProgressBar.style.transform = `scaleX(${through})`;
-        }
-
-        function fmtClock(ts) {
-            const d = new Date(ts);
-            const hh = d.getHours().toString().padStart(2, "0");
-            const mm = d.getMinutes().toString().padStart(2, "0");
-            const ss = d.getSeconds().toString().padStart(2, "0");
-            const ms = d.getMilliseconds().toString().padStart(3, "0");
-            return `${hh}:${mm}:${ss}.${ms}`;
-        }
-
-        function fmtDuration(ms) {
-            if (typeof ms !== "number" || ms < 0) return "";
-            if (ms < 1000) return ms + "ms";
-            const s = ms / 1000;
-            return s.toFixed(s >= 10 ? 1 : 2) + "s";
-        }
-
-        function applyDisplayLog(frames) {
-            if (!frames || frames.length === 0) {
-                displayLogList.innerHTML = '<li class="display-log-empty">Nothing on screen yet.</li>';
-                displayLogCount.textContent = "0 frames";
-                return;
-            }
-            displayLogCount.textContent = frames.length + " frame" + (frames.length === 1 ? "" : "s");
-            // Newest first
-            const rows = frames.slice().reverse().map((f) => {
-                const meta = [
-                    `<span class="dl-time">${fmtClock(f.at)}</span>`,
-                    `<span class="dl-dur">${fmtDuration(f.durationMs)}</span>`,
-                    `<span class="dl-state" data-state="${f.appState}">${f.appState}</span>`,
-                    f.song ? `<span class="dl-position">${fmtTime(f.position)}/${fmtTime(f.song.duration)}</span>` : "",
-                ].filter(Boolean).join("");
-
-                const body = (f.lines && f.lines.length > 0 ? f.lines : [f.text || ""])
-                    .map((line) => `<span class="dl-line">${escapeHtml(line) || "&nbsp;"}</span>`)
-                    .join("");
-
-                return `
-                    <li class="display-log-row" data-state="${f.appState}">
-                        <div class="dl-meta">${meta}</div>
-                        <pre class="dl-body">${body}</pre>
-                    </li>
-                `;
-            }).join("");
-            displayLogList.innerHTML = rows;
         }
 
         function applyHistory(items) {
@@ -256,7 +228,6 @@
                 applyState(data.connected ? data.state : "DISCONNECTED");
                 applySong(data.currentSong);
                 applyLyrics(data.lyrics);
-                applyDisplayLog(data.displayHistory);
                 applyHistory(data.history);
             } catch (_err) {
                 applyState("DISCONNECTED");
