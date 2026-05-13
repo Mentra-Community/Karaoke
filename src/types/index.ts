@@ -11,7 +11,19 @@ export interface CurrentSong {
   album?: string;
   duration: number;
   detectedAt: number;
+  /**
+   * True once an LRC has been loaded for this song. Always false
+   * while `lyricsLoading` is true, then resolves to true (LRC found)
+   * or stays false (no LRC available).
+   */
   hasLyrics: boolean;
+  /**
+   * True between song-detect and the LRC fetch resolving either way.
+   * The webview uses this to show "Loading lyrics…" instead of
+   * "No lyrics" during the fetch, so the user can tell the app is
+   * working not failing.
+   */
+  lyricsLoading: boolean;
   lrcData?: LRCLine[];
   confidence: number;
 }

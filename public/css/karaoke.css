@@ -244,6 +244,10 @@ body {
 #song-lyrics-flag[data-lyrics="yes"] {
     color: var(--accent);
 }
+#song-lyrics-flag[data-lyrics="loading"] {
+    color: var(--text-dim);
+    animation: pulse 1.4s ease-in-out infinite;
+}
 
 /* Now-playing actions row (sits below the art + text + heart row) */
 .np-actions {

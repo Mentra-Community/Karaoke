@@ -248,8 +248,17 @@
             songArtist.textContent = song.artist || "Unknown artist";
             songPosition.textContent = fmtTime(song.position);
             songDuration.textContent = fmtTime(song.duration);
-            songLyricsFlag.textContent = song.hasLyrics ? "Synced lyrics" : "No lyrics";
-            songLyricsFlag.dataset.lyrics = song.hasLyrics ? "yes" : "no";
+            // Three states: still fetching, found synced lyrics, gave up.
+            if (song.lyricsLoading) {
+                songLyricsFlag.textContent = "Loading lyrics…";
+                songLyricsFlag.dataset.lyrics = "loading";
+            } else if (song.hasLyrics) {
+                songLyricsFlag.textContent = "Synced lyrics";
+                songLyricsFlag.dataset.lyrics = "yes";
+            } else {
+                songLyricsFlag.textContent = "No lyrics";
+                songLyricsFlag.dataset.lyrics = "no";
+            }
             currentSongRef = {title: song.title, artist: song.artist};
             songFavBtn.hidden = false;
 

@@ -227,6 +227,10 @@ export class UserSession {
       duration: result.duration || 0,
       detectedAt: Date.now(),
       hasLyrics: false,
+      // Flips to false once the LRC fetch resolves either way. Drives
+      // the webview's "Loading lyrics…" vs "Synced lyrics"/"No lyrics"
+      // copy so the user can tell the app is working not stuck.
+      lyricsLoading: true,
       confidence: result.confidence
     };
 
@@ -256,23 +260,27 @@ export class UserSession {
     this.logger.info({}, 'Fetching lyrics for new song');
     const lrcData = await this.lyricsManager.fetchLyrics(newSong);
     
+    // Resolved one way or the other — clear the loading flag so the
+    // webview swaps "Loading lyrics…" for the final label.
+    this.currentSong.lyricsLoading = false;
+
     if (lrcData && lrcData.length > 0) {
       this.currentSong.lrcData = lrcData;
       this.currentSong.hasLyrics = true;
-      
-      this.logger.info({ 
+
+      this.logger.info({
         previousState: AppState[this.appState],
         newState: AppState[AppState.SONG_DETECTED_WITH_LYRICS],
         lyricsCount: lrcData.length
       }, 'State transition: Lyrics found');
-      
+
       this.appState = AppState.SONG_DETECTED_WITH_LYRICS;
     } else {
-      this.logger.info({ 
+      this.logger.info({
         previousState: AppState[this.appState],
         newState: AppState[AppState.SONG_DETECTED_NO_LYRICS]
       }, 'State transition: No lyrics available');
-      
+
       this.appState = AppState.SONG_DETECTED_NO_LYRICS;
     }
     
@@ -604,6 +612,7 @@ export class UserSession {
     }
     this.currentSong.lrcData = lines;
     this.currentSong.hasLyrics = true;
+    this.currentSong.lyricsLoading = false;
     this.appState = AppState.SONG_DETECTED_WITH_LYRICS;
     this.logger.info({lrcId, lyricsCount: lines.length}, 'Switched LRC version');
     return true;
@@ -627,6 +636,7 @@ export class UserSession {
         position: this.positionTracker.getCurrentPosition(),
         duration: song.duration,
         hasLyrics: song.hasLyrics,
+        lyricsLoading: song.lyricsLoading,
         artworkUrl: this.artworkService.peek(song.title, song.artist) ?? null,
         lrcId: this.lyricsManager.getCurrentLRCId(),
       } : null,
