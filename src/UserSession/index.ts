@@ -89,10 +89,66 @@ export class UserSession {
     this.appState = AppState.LISTENING;
     this.displayManager.showListening();
     this.recognitionManager.startListening();
-    
+    this.subscribeVoiceTriggers();
+
     this.displayManager.startUpdateTimer(() => {
       this.updateDisplay();
     }, 500);
+  }
+
+  /**
+   * Listen for spoken cues like "what song is this", "lyrics",
+   * "karaoke" — when the user says one out loud the glasses pick it
+   * up in transcription, and we force an immediate ACR recognition
+   * pass. Useful for "I'm impatient, detect now" without reaching
+   * for the phone.
+   *
+   * Only triggers on FINAL transcripts so we don't fire repeatedly
+   * on interim partials. Cooldown of VOICE_TRIGGER_COOLDOWN_MS
+   * between trigger events to avoid spamming ACR.
+   */
+  private subscribeVoiceTriggers(): void {
+    try {
+      this.session.events.onTranscription((data) => this.handleTranscription(data));
+      this.logger.info({}, 'Voice trigger subscription active');
+    } catch (err) {
+      this.logger.warn({err: (err as Error).message}, 'Failed to subscribe to transcription events');
+    }
+  }
+
+  private lastVoiceTriggerAt = 0;
+  private readonly VOICE_TRIGGER_COOLDOWN_MS = 8000;
+
+  /**
+   * Phrases that fire a manual recognition. Case-insensitive substring
+   * match against the final transcript. Keep this list short — false
+   * positives cost an ACR credit and confuse drift handling.
+   */
+  private readonly VOICE_TRIGGER_PHRASES = [
+    'karaoke',
+    'lyrics',
+    'what song',
+    'song is this',
+    'whats this song',
+    "what's this song",
+    'detect song',
+    'identify song',
+  ];
+
+  private handleTranscription(data: {text?: string; isFinal?: boolean}): void {
+    if (!data?.isFinal || !data.text) return;
+    const text = data.text.toLowerCase();
+    const matched = this.VOICE_TRIGGER_PHRASES.find(p => text.includes(p));
+    if (!matched) return;
+
+    const now = Date.now();
+    if (now - this.lastVoiceTriggerAt < this.VOICE_TRIGGER_COOLDOWN_MS) {
+      this.logger.debug({matched, text}, 'Voice trigger matched but within cooldown');
+      return;
+    }
+    this.lastVoiceTriggerAt = now;
+    this.logger.info({matched, text}, 'Voice trigger → forcing recognition');
+    this.requestResync().catch(err => this.logger.warn({err: err?.message}, 'Voice-triggered resync failed'));
   }
 
   private setupAudioStream(): void {

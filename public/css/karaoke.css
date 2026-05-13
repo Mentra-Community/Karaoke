@@ -155,6 +155,10 @@ body {
     color: var(--text-faint);
 }
 
+.np-empty .pill-btn {
+    margin-top: 6px;
+}
+
 /* Now-playing active layout: album art on the left, text on the right. */
 .np-active {
     display: flex;
