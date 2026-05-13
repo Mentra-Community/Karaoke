@@ -1,13 +1,13 @@
-# Prod deploy is no longer automatic on push to main.
-#
-# To deploy to prod, trigger this workflow manually from the GitHub
-# Actions UI: "Deploy karaoke to prod" → Run workflow.
-#
+# Prod auto-deploys on push to main.
 # Cluster 5692 is the new AWS prod cluster in project 15081.
+# Also exposes workflow_dispatch for manual reruns.
 
 name: Deploy karaoke to prod
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
