@@ -355,9 +355,10 @@ export class UserSession {
     
     this.recognitionManager.setState(RecognitionState.SONG_DETECTED_CONFIRMED);
     this.recognitionManager.updateLastConfidentRecognition();
+    this.recognitionManager.markSongConfirmed();
     await this.handleNewSong(result);
   }
-  
+
   private async handlePendingState(result: RecognitionResult): Promise<void> {
     const pending = this.recognitionManager.getPendingRecognition();
     if (!pending) return;
@@ -388,6 +389,7 @@ export class UserSession {
       
       this.recognitionManager.setState(RecognitionState.SONG_DETECTED_CONFIRMED);
       this.recognitionManager.updateLastConfidentRecognition();
+      this.recognitionManager.markSongConfirmed();
       this.recognitionManager.setPendingRecognition(null);
       await this.handleNewSong(result);
     } else {
@@ -407,30 +409,53 @@ export class UserSession {
   
   private async handlePlayingState(result: RecognitionResult, isSameSong: boolean): Promise<void> {
     if (isSameSong) {
-      // Position update
+      // Position update / drift check.
       if (result.offsetSeconds !== undefined) {
-        const isValid = this.positionTracker.validatePosition(
-          result.offsetSeconds,
-          Date.now(),
-          result.confidence,
-          result.apiLatency || 0
-        );
+        const expected = this.positionTracker.getCurrentPosition();
+        const detected = result.offsetSeconds;
+        const drift = expected - detected;
+        const absDrift = Math.abs(drift);
+        const inFresh = this.recognitionManager.isInFreshWindow();
 
-        if (!isValid) {
-          this.logger.info({ 
-            expectedPosition: this.positionTracker.getCurrentPosition(),
-            detectedPosition: result.offsetSeconds,
-            drift: Math.abs(this.positionTracker.getCurrentPosition() - result.offsetSeconds)
-          }, 'Position drift detected, recalibrating');
-          
+        // During the fresh window we use a tighter threshold because
+        // the most common failure mode (wrong-version cut) shows up
+        // as a sub-3s drift that grows over time. Catching it on the
+        // first sample saves the user from minutes of misaligned
+        // lyrics.
+        const recalibrateThreshold = inFresh
+          ? this.config.FRESH_DRIFT_RECALIBRATE_THRESHOLD
+          : 3; // legacy MAX_DRIFT_SECONDS from PositionTracker
+
+        this.logger.info({
+          expectedPosition: expected,
+          detectedPosition: detected,
+          drift,
+          inFreshWindow: inFresh,
+          recalibrateThreshold,
+        }, 'Periodic position check');
+
+        if (absDrift > recalibrateThreshold) {
+          this.logger.info({drift, inFresh}, 'Position drift exceeds threshold, recalibrating');
           this.positionTracker.recalibrate(
-            result.offsetSeconds,
+            detected,
             Date.now(),
             result.confidence,
-            result.apiLatency || 0
+            result.apiLatency || 0,
+          );
+        } else {
+          // Even when we don't hard-recalibrate, feed the sample to
+          // the tracker so its weighted drift estimate stays warm.
+          // validatePosition is a no-op side-effect read; let
+          // recalibrate handle the bookkeeping with its built-in
+          // hysteresis (MAX_DRIFT_SECONDS guard inside).
+          this.positionTracker.recalibrate(
+            detected,
+            Date.now(),
+            result.confidence,
+            result.apiLatency || 0,
           );
         }
-        
+
         this.recognitionManager.updateLastConfidentRecognition();
       }
     } else {
@@ -479,6 +504,7 @@ export class UserSession {
       this.logger.info({}, 'Song switch verified');
       this.recognitionManager.setState(RecognitionState.SONG_DETECTED_CONFIRMED);
       this.recognitionManager.updateLastConfidentRecognition();
+      this.recognitionManager.markSongConfirmed();
       this.recognitionManager.setPendingRecognition(null);
       await this.handleNewSong(result);
     } else if (isCurrentSong) {

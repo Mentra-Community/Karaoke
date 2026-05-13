@@ -33,8 +33,12 @@ export class RecognitionManager {
   //     the silence-backoff multiplier. Reset on any successful
   //     recognition OR when audio energy crosses back above the
   //     silence threshold.
+  //   songConfirmedAt: epoch ms when the current song was confirmed.
+  //     Used to identify the "fresh" window where ACR samples need to
+  //     be tighter so we catch version mismatches early.
   private probesSinceWake: number = 0;
   private consecutiveMisses: number = 0;
+  private songConfirmedAt: number = 0;
 
   constructor(
     acrService: ACRCloudService,
@@ -198,11 +202,14 @@ export class RecognitionManager {
     }, 'Recognition state change');
 
     // Re-enter LISTENING (song ended, switch failed, etc.) → reset
-    // the fast-probe counter so we catch the next song quickly.
-    // Don't reset consecutiveMisses here; that only resets on a real
-    // detection or first audio that passes the silence gate.
+    // the fast-probe counter so we catch the next song quickly, and
+    // clear the fresh-window so any prior song doesn't bleed into the
+    // next detection's cadence. Don't reset consecutiveMisses here;
+    // that only resets on a real detection or first audio that passes
+    // the silence gate.
     if (state === RecognitionState.LISTENING && this.state !== RecognitionState.LISTENING) {
       this.probesSinceWake = 0;
+      this.songConfirmedAt = 0;
     }
 
     this.state = state;
@@ -223,6 +230,20 @@ export class RecognitionManager {
   updateLastConfidentRecognition(): void {
     this.lastConfidentRecognition = Date.now();
   }
+
+  /**
+   * Called by UserSession when a fresh song goes SONG_DETECTED_CONFIRMED.
+   * Starts the tighter sampling window. Passing 0 (or just calling
+   * setState(LISTENING) elsewhere) effectively clears it.
+   */
+  markSongConfirmed(): void {
+    this.songConfirmedAt = Date.now();
+  }
+
+  isInFreshWindow(): boolean {
+    if (this.songConfirmedAt === 0) return false;
+    return Date.now() - this.songConfirmedAt < this.config.FRESH_DETECTION_DURATION;
+  }
   
   private getRecognitionInterval(): number {
     const now = Date.now();
@@ -238,6 +259,12 @@ export class RecognitionManager {
 
       case RecognitionState.SONG_PLAYING:
       case RecognitionState.SONG_DETECTED_CONFIRMED:
+        // First N seconds after confirmation: tight cadence so we
+        // catch wrong-version cuts early (extended/sped-up tracks
+        // that ACR fingerprints to a canonical recording).
+        if (this.isInFreshWindow()) {
+          return this.config.RECOGNITION_INTERVAL_FRESH;
+        }
         if (timeSinceConfident > this.config.CONFIDENCE_DECAY_TIME) {
           return this.config.RECOGNITION_INTERVAL_UNCERTAIN;
         }

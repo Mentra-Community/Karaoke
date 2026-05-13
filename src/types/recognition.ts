@@ -21,6 +21,15 @@ export interface RecognitionConfig {
   RECOGNITION_INTERVAL_VERIFY: number;
   RECOGNITION_INTERVAL_UNCERTAIN: number;
 
+  // "Fresh detection" mode: right after a song is confirmed we want
+  // tighter ACR sampling so any version-vs-canonical mismatch shows
+  // up within ~30s instead of minutes. Different cuts (extended,
+  // sped-up, slowed, live) have different intros, so position drift
+  // tends to manifest in the first half-minute or never.
+  RECOGNITION_INTERVAL_FRESH: number;       // ms between probes during fresh window
+  FRESH_DETECTION_DURATION: number;         // how long the fresh window lasts after confirmation
+  FRESH_DRIFT_RECALIBRATE_THRESHOLD: number; // seconds; tighter than steady-state
+
   // Fast-detect mode: when we just started listening (or just woke
   // from silence backoff), fire a flurry of short-interval ACR calls
   // so a freshly-started song gets caught quickly.
@@ -61,6 +70,14 @@ export const DEFAULT_RECOGNITION_CONFIG: RecognitionConfig = {
   RECOGNITION_INTERVAL_PLAYING: 12000,
   RECOGNITION_INTERVAL_VERIFY: 5000,
   RECOGNITION_INTERVAL_UNCERTAIN: 8000,
+
+  // Fresh-detection window: 6s probes for the first 45s, with a
+  // tighter 1.5s recalibrate threshold (vs the 3s steady-state).
+  // That gives us ~7 samples to catch wrong-version cases like the
+  // "Hey Jude 8-min YouTube extended cut" or "Sped Up 204".
+  RECOGNITION_INTERVAL_FRESH: 6000,
+  FRESH_DETECTION_DURATION: 45000,
+  FRESH_DRIFT_RECALIBRATE_THRESHOLD: 1.5,
 
   // Fast-detect mode tuning. 3 probes at 5s = first-detect floor of ~5s
   // (assuming the user starts a song at session start). After that we
