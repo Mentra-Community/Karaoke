@@ -85,8 +85,16 @@ export class FiveLineDisplayFormatter {
       lines.push('');
     }
 
-    // Line 4: Empty
-    lines.push('');
+    // Line 4: while the LRC fetch is in flight, show a loading hint
+    // so the user knows we're working on lyrics, not just sitting on
+    // the song info. Once fetchLyrics resolves, lyricsLoading flips
+    // false and either the state moves to SONG_DETECTED_WITH_LYRICS
+    // (full lyric view) or stays here with the line cleared.
+    if (song.lyricsLoading) {
+      lines.push('  Lyrics loading…');
+    } else {
+      lines.push('');
+    }
 
     // Line 5: Time. During the song-end grace window position keeps
     // ticking past duration; clamp so the HUD never displays nonsense

@@ -289,18 +289,10 @@ export class UserSession {
   }
 
   private async handleNewSong(result: RecognitionResult): Promise<void> {
-    this.logger.info({ 
+    this.logger.info({
       previousState: AppState[this.appState],
-      newState: AppState[AppState.PROCESSING],
       recognitionState: RecognitionState[this.recognitionManager.getState()]
-    }, 'State transition: Processing new song');
-    
-    // Only show "Processing..." if we're not already showing a song
-    // This prevents lyrics from disappearing during song switches
-    if (!this.currentSong || this.appState === AppState.LISTENING) {
-      this.appState = AppState.PROCESSING;
-      this.updateDisplay(); // This will show "Processing..."
-    }
+    }, 'State transition: New song detected');
 
     const newSong: CurrentSong = {
       title: result.title,
@@ -310,8 +302,9 @@ export class UserSession {
       detectedAt: Date.now(),
       hasLyrics: false,
       // Flips to false once the LRC fetch resolves either way. Drives
-      // the webview's "Loading lyrics…" vs "Synced lyrics"/"No lyrics"
-      // copy so the user can tell the app is working not stuck.
+      // both the webview's "Loading lyrics…" label and the glasses
+      // HUD's "Lyrics loading…" line so the user knows the app is
+      // working not stuck.
       lyricsLoading: true,
       confidence: result.confidence
     };
@@ -320,6 +313,21 @@ export class UserSession {
     this.lyricsOffsetSeconds = 0; // fresh song → start from no offset
     this.autoSyncEnabled = true; // and let auto-sync drive again
     this.historyManager.addSong(newSong);
+
+    // Skip the "Processing…" intermediate state. We already know the
+    // title + artist; show that on the HUD immediately (with a
+    // "Lyrics loading…" indicator) instead of making the user stare
+    // at a placeholder while the LRC roundtrip happens. The formatter
+    // for SONG_DETECTED_NO_LYRICS reads song.lyricsLoading and adds
+    // the loading line until it flips.
+    //
+    // Only switch the HUD if we're not already mid-song — if a
+    // detection during SONG_PLAYING reuses this path, the current
+    // lyric chunks should keep showing until we verify the switch.
+    if (this.appState === AppState.LISTENING || this.appState === AppState.PROCESSING) {
+      this.appState = AppState.SONG_DETECTED_NO_LYRICS;
+      this.updateDisplay();
+    }
 
     // Fire-and-forget album art lookup. The webview reads via
     // ArtworkService.peek() in getStats(), so it'll be visible on the
