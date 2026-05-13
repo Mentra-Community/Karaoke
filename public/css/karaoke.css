@@ -1,0 +1,261 @@
+/**
+ * karaoke.css
+ *
+ * Dark, music-app vibe. Single column, mobile-first. No frameworks.
+ */
+
+:root {
+    --bg: #0c0a18;
+    --bg-elev: #161229;
+    --bg-card: #1d1838;
+    --border: rgba(255, 255, 255, 0.08);
+    --text: #ffffff;
+    --text-dim: rgba(255, 255, 255, 0.6);
+    --text-faint: rgba(255, 255, 255, 0.4);
+    --accent: #ff5fa2;
+    --accent-2: #6c63ff;
+    --green: #2ecc71;
+    --amber: #f5a623;
+    --radius: 16px;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100%;
+}
+
+body {
+    background:
+        radial-gradient(at 80% -10%, rgba(108, 99, 255, 0.35) 0%, transparent 50%),
+        radial-gradient(at 0% 100%, rgba(255, 95, 162, 0.3) 0%, transparent 55%),
+        var(--bg);
+    min-height: 100vh;
+    padding-bottom: env(safe-area-inset-bottom);
+}
+
+.app {
+    max-width: 560px;
+    margin: 0 auto;
+    padding: 24px 20px 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* Hero */
+.hero {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.hero-row {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 13px;
+    color: var(--text-dim);
+}
+
+.dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-faint);
+    transition: background 0.2s ease;
+}
+.dot[data-state="LISTENING"]               { background: var(--accent-2); animation: pulse 1.4s ease-in-out infinite; }
+.dot[data-state="PROCESSING"]              { background: var(--amber);     animation: pulse 1s   ease-in-out infinite; }
+.dot[data-state="SONG_DETECTED_WITH_LYRICS"] { background: var(--green); }
+.dot[data-state="SONG_DETECTED_NO_LYRICS"]   { background: var(--accent); }
+.dot[data-state="DISCONNECTED"]            { background: var(--text-faint); }
+
+@keyframes pulse {
+    0%, 100% { opacity: 1;    transform: scale(1);   }
+    50%      { opacity: 0.45; transform: scale(0.7); }
+}
+
+.hero h1 {
+    font-size: 38px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    background: linear-gradient(120deg, var(--accent) 0%, var(--accent-2) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.tagline {
+    color: var(--text-dim);
+    font-size: 15px;
+}
+
+/* Now playing */
+.now-playing {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    min-height: 180px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.np-empty {
+    text-align: center;
+    color: var(--text-dim);
+}
+
+.np-empty .ear {
+    font-size: 40px;
+    margin-bottom: 12px;
+}
+
+.np-empty .np-title {
+    color: var(--text);
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.np-empty .np-sub {
+    font-size: 14px;
+    color: var(--text-faint);
+}
+
+.np-active .np-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 11px;
+    color: var(--accent);
+    margin-bottom: 8px;
+    font-weight: 700;
+}
+
+.np-active .np-title {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin-bottom: 6px;
+    line-height: 1.2;
+}
+
+.np-active .np-artist {
+    font-size: 16px;
+    color: var(--text-dim);
+    margin-bottom: 18px;
+}
+
+.np-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    color: var(--text-faint);
+}
+
+.dot-sep {
+    color: var(--text-faint);
+}
+
+#song-lyrics-flag[data-lyrics="yes"] {
+    color: var(--green);
+}
+
+/* History */
+.history h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-faint);
+    margin-bottom: 10px;
+    font-weight: 700;
+}
+
+.history-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.history-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.history-title {
+    font-size: 15px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-artist {
+    font-size: 13px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.history-time {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--text-faint);
+}
+
+.history-empty {
+    color: var(--text-faint);
+    font-size: 14px;
+    padding: 12px 4px;
+}
+
+/* Footer */
+.footer {
+    margin-top: 4px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-faint);
+}
+
+.user-id {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.user-id.muted {
+    opacity: 0.6;
+}

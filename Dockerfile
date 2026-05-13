@@ -14,9 +14,8 @@ COPY . .
 # Build the application
 # RUN bun run build
 
-# Expose the port
+# Expose the port (porter.yaml maps service port → 80)
 EXPOSE 80
 
-# Ready to start the application
-CMD ["echo", "Ready to run services"]
-# CMD ["bun", "start"]
+# Run the app
+CMD ["bun", "start"]

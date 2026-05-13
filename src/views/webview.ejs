@@ -2,22 +2,161 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MentraOS Example App</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>Karaoke</title>
+    <link rel="stylesheet" href="/css/karaoke.css">
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>MentraOS Example App</h1>
+    <div class="app">
+        <header class="hero">
+            <div class="hero-row">
+                <div class="badge" id="state-badge">
+                    <span class="dot" id="state-dot"></span>
+                    <span id="state-label">Connecting…</span>
+                </div>
+            </div>
+            <h1>Karaoke</h1>
+            <p class="tagline">Sing along on your glasses.</p>
         </header>
-        <div class="instructions">
+
+        <section class="now-playing" id="now-playing">
+            <div class="np-empty" id="np-empty">
+                <div class="ear">👂</div>
+                <p class="np-title">Listening for a song…</p>
+                <p class="np-sub">Play any track nearby and we'll catch the lyrics.</p>
+            </div>
+
+            <div class="np-active" id="np-active" hidden>
+                <p class="np-eyebrow">Now Playing</p>
+                <h2 class="np-title" id="song-title">—</h2>
+                <p class="np-artist" id="song-artist">—</p>
+                <div class="np-meta">
+                    <span id="song-position">0:00</span>
+                    <span class="dot-sep">•</span>
+                    <span id="song-lyrics-flag">No lyrics</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="history">
+            <h3>Recently identified</h3>
+            <ol class="history-list" id="history-list">
+                <li class="history-empty">Nothing yet.</li>
+            </ol>
+        </section>
+
+        <footer class="footer">
             <% if (userId) { %>
-                <p>Logged in as: <span class="user-id"><%= userId %></span></p>
+                <span class="user-id"><%= userId %></span>
             <% } else { %>
-                <p>Not logged in</p>
+                <span class="user-id muted">Not signed in</span>
             <% } %>
-        </div>
+        </footer>
     </div>
+
+    <script>
+    (function () {
+        const $ = (id) => document.getElementById(id);
+        const stateLabel = $("state-label");
+        const stateDot = $("state-dot");
+        const npEmpty = $("np-empty");
+        const npActive = $("np-active");
+        const songTitle = $("song-title");
+        const songArtist = $("song-artist");
+        const songPosition = $("song-position");
+        const songLyricsFlag = $("song-lyrics-flag");
+        const historyList = $("history-list");
+
+        const STATE_LABELS = {
+            LISTENING: "Listening",
+            PROCESSING: "Processing",
+            SONG_DETECTED_WITH_LYRICS: "Singing along",
+            SONG_DETECTED_NO_LYRICS: "Song detected",
+            DISCONNECTED: "Not connected",
+        };
+
+        function fmtTime(seconds) {
+            if (typeof seconds !== "number" || !isFinite(seconds) || seconds < 0) return "0:00";
+            const m = Math.floor(seconds / 60);
+            const s = Math.floor(seconds % 60).toString().padStart(2, "0");
+            return m + ":" + s;
+        }
+
+        function fmtRelative(ts) {
+            const diff = Math.max(0, Date.now() - ts);
+            const s = Math.floor(diff / 1000);
+            if (s < 60) return s + "s ago";
+            const m = Math.floor(s / 60);
+            if (m < 60) return m + "m ago";
+            const h = Math.floor(m / 60);
+            return h + "h ago";
+        }
+
+        function applyState(state) {
+            stateLabel.textContent = STATE_LABELS[state] ?? state;
+            stateDot.dataset.state = state;
+        }
+
+        function applySong(song) {
+            if (!song) {
+                npEmpty.hidden = false;
+                npActive.hidden = true;
+                return;
+            }
+            npEmpty.hidden = true;
+            npActive.hidden = false;
+            songTitle.textContent = song.title || "Unknown";
+            songArtist.textContent = song.artist || "Unknown artist";
+            songPosition.textContent = fmtTime(song.position);
+            songLyricsFlag.textContent = song.hasLyrics ? "Synced lyrics" : "No lyrics";
+            songLyricsFlag.dataset.lyrics = song.hasLyrics ? "yes" : "no";
+        }
+
+        function applyHistory(items) {
+            if (!items || items.length === 0) {
+                historyList.innerHTML = '<li class="history-empty">Nothing yet.</li>';
+                return;
+            }
+            historyList.innerHTML = items
+                .map((h) => `
+                    <li class="history-item">
+                        <div class="history-text">
+                            <span class="history-title">${escapeHtml(h.title)}</span>
+                            <span class="history-artist">${escapeHtml(h.artist)}</span>
+                        </div>
+                        <span class="history-time">${fmtRelative(h.identifiedAt)}</span>
+                    </li>
+                `)
+                .join("");
+        }
+
+        function escapeHtml(s) {
+            return String(s ?? "")
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;");
+        }
+
+        async function tick() {
+            try {
+                const r = await fetch("/api/stats", {credentials: "include"});
+                if (!r.ok) {
+                    applyState("DISCONNECTED");
+                    return;
+                }
+                const data = await r.json();
+                applyState(data.connected ? data.state : "DISCONNECTED");
+                applySong(data.currentSong);
+                applyHistory(data.history);
+            } catch (_err) {
+                applyState("DISCONNECTED");
+            }
+        }
+
+        tick();
+        setInterval(tick, 1000);
+    })();
+    </script>
 </body>
 </html>

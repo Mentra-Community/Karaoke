@@ -1,31 +1,75 @@
-// import { AuthenticatedRequest, AppServer } from '@mentra/sdk';
-// import express from 'express';
-// import path from 'path';
+/**
+ * webview.ts
+ *
+ * Mounts the phone-side webview for the Karaoke miniapp.
+ *
+ * Two endpoints:
+ *   GET /webview      Renders the EJS shell. Live state comes from
+ *                     polling /api/stats every second.
+ *   GET /api/stats    JSON snapshot of the authenticated user's
+ *                     current song, app state, and recent history.
+ *
+ * Both routes use the SDK's AuthenticatedRequest, so we resolve the
+ * UserSession by the runtime-provided authUserId instead of trusting
+ * any query string.
+ */
 
-// /**
-//  * Sets up all Express routes and middleware for the server
-//  * @param server The server instance
-//  */
-// export function  setupExpressRoutes(server: AppServer): void {
-//   // Get the Express app instance
-//   const app = server.getExpressApp();
+import path from "path"
+import express, {type Request, type Response} from "express"
+import type {KaraokeApp} from "./index"
 
-//   // Set up EJS as the view engine
-//   app.set('view engine', 'ejs');
-//   app.engine('ejs', require('ejs').__express);
-//   app.set('views', path.join(__dirname, 'views'));
+// The SDK auth middleware augments Express's Request with authUserId.
+// We type-narrow locally instead of importing AuthenticatedRequest to
+// avoid overload-conflict noise when registering routes.
+type AuthedRequest = Request & {authUserId?: string}
 
-//   // Register a route for handling webview requests
-//   app.get('/webview', (req: AuthenticatedRequest, res) => {
-//     if (req.authUserId) {
-//       // Render the webview template
-//       res.render('webview', {
-//         userId: req.authUserId,
-//       });
-//     } else {
-//       res.render('webview', {
-//         userId: undefined,
-//       });
-//     }
-//   });
-// }
+const ejs = require("ejs")
+
+export function setupExpressRoutes(app: KaraokeApp): void {
+  const expressApp = app.getExpressApp()
+
+  expressApp.set("view engine", "ejs")
+  expressApp.engine("ejs", ejs.__express)
+  expressApp.set("views", path.join(__dirname, "views"))
+
+  // Serve /public (css, images) as static assets.
+  expressApp.use(express.static(path.join(__dirname, "..", "public")))
+
+  expressApp.get("/webview", (req: Request, res: Response) => {
+    const userId = (req as AuthedRequest).authUserId ?? null
+    res.render("webview", {userId})
+  })
+
+  expressApp.get("/api/stats", (req: Request, res: Response) => {
+    const userId = (req as AuthedRequest).authUserId
+    if (!userId) {
+      res.status(401).json({error: "Not authenticated"})
+      return
+    }
+
+    const session = app.getSessionByUserId(userId)
+    if (!session) {
+      res.json({
+        connected: false,
+        state: "DISCONNECTED",
+        currentSong: null,
+        history: [],
+      })
+      return
+    }
+
+    const stats = session.getStats()
+    const recent = session.historyManager.getRecentSongs(8)
+
+    res.json({
+      connected: true,
+      state: stats.currentState,
+      currentSong: stats.currentSong,
+      history: recent.map((h) => ({
+        title: h.title,
+        artist: h.artist,
+        identifiedAt: h.identifiedAt,
+      })),
+    })
+  })
+}

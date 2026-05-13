@@ -1,5 +1,6 @@
 import { AppServer, AppSession } from "@mentra/sdk";
 import { UserSession } from './UserSession';
+import { setupExpressRoutes } from './webview';
 import dotenv from 'dotenv';
 // Load environment variables from .env file
 dotenv.config();
@@ -20,6 +21,7 @@ export class KaraokeApp extends AppServer {
       port: parseInt(process.env.PORT || '3000')
     });
     this.validateConfig();
+    setupExpressRoutes(this);
   }
 
   protected async onSession(
@@ -68,6 +70,20 @@ export class KaraokeApp extends AppServer {
 
   getAllSessionStats(): any[] {
     return Array.from(this.userSessions.values()).map(session => session.getStats());
+  }
+
+  /**
+   * Look up a UserSession by authenticated user id. The webview gets
+   * `authUserId` from the SDK auth middleware; sessions are keyed by
+   * sessionId internally, so we scan. A user can have multiple
+   * sessions (multi-device), so we return the most recently created.
+   */
+  getSessionByUserId(userId: string): UserSession | undefined {
+    let match: UserSession | undefined;
+    for (const session of this.userSessions.values()) {
+      if (session.userId === userId) match = session;
+    }
+    return match;
   }
 }
 
