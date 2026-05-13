@@ -70,27 +70,30 @@ export class FiveLineDisplayFormatter {
 
   private formatSongInfo(song: CurrentSong, position: number): string[] {
     const lines: string[] = [];
-    
+
     // Line 1: Song title
     lines.push(this.fitOneLine(`♪ ${song.title}`));
-    
+
     // Line 2: Artist
     lines.push(this.fitOneLine(`  ${song.artist}`));
-    
+
     // Line 3: Album (if available)
     if (song.album) {
       lines.push(this.fitOneLine(`  ${song.album}`));
     } else {
       lines.push('');
     }
-    
+
     // Line 4: Empty
     lines.push('');
-    
-    // Line 5: Time
-    const timeStr = `  ${formatTimestamp(position)} / ${formatTimestamp(song.duration)}`;
+
+    // Line 5: Time. During the song-end grace window position keeps
+    // ticking past duration; clamp so the HUD never displays nonsense
+    // like "4:45 / 4:40".
+    const shownPosition = song.duration > 0 ? Math.min(position, song.duration) : position;
+    const timeStr = `  ${formatTimestamp(shownPosition)} / ${formatTimestamp(song.duration)}`;
     lines.push(timeStr);
-    
+
     return lines;
   }
 
@@ -138,8 +141,9 @@ export class FiveLineDisplayFormatter {
       }
     }
 
-    // Bottom row: time / duration
-    lines.push(`${formatTimestamp(position)} / ${formatTimestamp(song.duration)}`);
+    // Bottom row: time / duration (clamp to avoid overflow display)
+    const shownPosition = song.duration > 0 ? Math.min(position, song.duration) : position;
+    lines.push(`${formatTimestamp(shownPosition)} / ${formatTimestamp(song.duration)}`);
     return lines;
   }
 

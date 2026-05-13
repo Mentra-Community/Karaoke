@@ -279,22 +279,33 @@ export class UserSession {
 
   private updateDisplay(): void {
     const position = this.positionTracker.getCurrentPosition();
-    
-    // Use the new 5-line formatter
-    const currentChunk = this.currentSong && this.appState === AppState.SONG_DETECTED_WITH_LYRICS
+
+    // Once the playback clock has run past the song's reported duration
+    // we're in the recognition grace period (waiting to confirm the
+    // song really ended). Show LISTENING on the HUD right now so the
+    // user doesn't see a stale "4:45 / 4:40" frame while we wait for
+    // the state machine to catch up.
+    const songOver =
+      !!this.currentSong &&
+      this.currentSong.duration > 0 &&
+      position >= this.currentSong.duration;
+
+    const renderState = songOver ? AppState.LISTENING : this.appState;
+    const renderSong = songOver ? undefined : this.currentSong;
+
+    const currentChunk = renderSong && renderState === AppState.SONG_DETECTED_WITH_LYRICS
       ? this.lyricsManager.getCurrentChunk(position)
       : null;
-    
-    const nextChunk = this.currentSong && this.appState === AppState.SONG_DETECTED_WITH_LYRICS
+    const nextChunk = renderSong && renderState === AppState.SONG_DETECTED_WITH_LYRICS
       ? this.lyricsManager.getNextChunk(position)
       : null;
-    
+
     this.displayManager.displayFormatted(
-      this.appState,
-      this.currentSong,
+      renderState,
+      renderSong,
       currentChunk,
       nextChunk,
-      position
+      position,
     );
 
     // Check if song ended
@@ -317,6 +328,13 @@ export class UserSession {
     this.recognitionManager.setState(RecognitionState.LISTENING);
     this.recognitionManager.setPendingRecognition(null);
     this.clearVerificationTimer();
+
+    // After a song ends, hold a tight ACR cadence for ~60s. Most
+    // listening-flow gaps (playlist auto-advance, manual track skip,
+    // DJ blend) are sub-30s, so we'd rather burn a few extra ACR
+    // calls than miss the next song's first 30 seconds.
+    this.recognitionManager.enterAlertMode();
+
     // Don't update display here - let updateDisplay handle it
   }
   

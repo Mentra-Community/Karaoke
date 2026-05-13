@@ -37,6 +37,13 @@ export interface RecognitionConfig {
   RECOGNITION_INITIAL_PROBE_COUNT: number; // how many fast probes before settling into LISTENING cadence
   RECOGNITION_INITIAL_MIN_AUDIO: number;   // min ms of audio needed before firing the very first probe
 
+  // Alert mode: right after a song ends another is likely about to
+  // start (playlist auto-advance, DJ flow). Hold a tight ACR cadence
+  // for a short window before letting LISTENING decay back to the
+  // silence-backoff regime.
+  ALERT_MODE_DURATION: number;
+  RECOGNITION_INTERVAL_ALERT: number;
+
   // Silence-backoff mode: after this many consecutive ACR misses,
   // exponentially extend the gap between attempts. Resets the moment
   // a song is detected (or audio passes the RMS gate again).
@@ -85,6 +92,12 @@ export const DEFAULT_RECOGNITION_CONFIG: RecognitionConfig = {
   RECOGNITION_INITIAL_INTERVAL: 5000,
   RECOGNITION_INITIAL_PROBE_COUNT: 3,
   RECOGNITION_INITIAL_MIN_AUDIO: 3000,
+
+  // Alert window: 60s after song-end, probe every 5s. Most "next
+  // track" gaps are sub-30s, so this catches them with one or two
+  // probes to spare before falling back to standard listening.
+  ALERT_MODE_DURATION: 60000,
+  RECOGNITION_INTERVAL_ALERT: 5000,
 
   // Silence-backoff: after 4 misses (4 × 15s = 60s of silence), start
   // doubling the wait. Cap at 2 minutes so we don't go fully asleep —

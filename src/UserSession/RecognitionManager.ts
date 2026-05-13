@@ -39,6 +39,13 @@ export class RecognitionManager {
   private probesSinceWake: number = 0;
   private consecutiveMisses: number = 0;
   private songConfirmedAt: number = 0;
+  /**
+   * Epoch ms until which we stay in "alert mode" — right after a song
+   * ends we expect another to start soon, so we probe more often
+   * before letting the silence-backoff regime take over. 0 = no alert
+   * window active.
+   */
+  private alertModeUntil: number = 0;
 
   constructor(
     acrService: ACRCloudService,
@@ -244,6 +251,23 @@ export class RecognitionManager {
     if (this.songConfirmedAt === 0) return false;
     return Date.now() - this.songConfirmedAt < this.config.FRESH_DETECTION_DURATION;
   }
+
+  /**
+   * Called when a song ends and we drop back to LISTENING. Holds a
+   * tight ACR cadence for ALERT_MODE_DURATION so we catch a quickly-
+   * starting next track. The probes-since-wake counter is also reset
+   * so the initial fast-probe budget gets a fresh ALERT_PROBE_COUNT
+   * worth of room before backoff kicks in.
+   */
+  enterAlertMode(): void {
+    this.alertModeUntil = Date.now() + this.config.ALERT_MODE_DURATION;
+    this.probesSinceWake = 0;
+    this.consecutiveMisses = 0;
+  }
+
+  isInAlertMode(): boolean {
+    return this.alertModeUntil > 0 && Date.now() < this.alertModeUntil;
+  }
   
   private getRecognitionInterval(): number {
     const now = Date.now();
@@ -279,14 +303,23 @@ export class RecognitionManager {
   }
 
   /**
-   * LISTENING-state cadence:
-   *  1. First N probes after waking: short interval (catch fresh songs fast).
-   *  2. Steady state: normal LISTENING interval.
-   *  3. After repeated misses: exponential backoff up to a cap.
+   * LISTENING-state cadence priority:
+   *  1. Fresh-detection probe budget: short interval until N probes fire.
+   *  2. Alert mode (right after a song ended): tight cadence for ~60s.
+   *  3. Steady state: normal LISTENING interval.
+   *  4. After repeated misses past the threshold: exponential backoff.
+   *
+   * Alert mode beats steady-state but loses to the initial probe budget,
+   * because once we boot a session we want the very first detection
+   * window (3 probes at 5s) regardless of any prior alert.
    */
   private getListeningInterval(): number {
     if (this.probesSinceWake < this.config.RECOGNITION_INITIAL_PROBE_COUNT) {
       return this.config.RECOGNITION_INITIAL_INTERVAL;
+    }
+
+    if (this.isInAlertMode()) {
+      return this.config.RECOGNITION_INTERVAL_ALERT;
     }
 
     const base = this.config.RECOGNITION_INTERVAL_LISTENING;
