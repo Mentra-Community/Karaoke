@@ -306,12 +306,10 @@ export class UserSession {
     const renderState = songOver ? AppState.LISTENING : this.appState;
     const renderSong = songOver ? undefined : this.currentSong;
 
-    const currentChunk = renderSong && renderState === AppState.SONG_DETECTED_WITH_LYRICS
-      ? this.lyricsManager.getCurrentChunk(position)
-      : null;
-    const nextChunk = renderSong && renderState === AppState.SONG_DETECTED_WITH_LYRICS
-      ? this.lyricsManager.getNextChunk(position)
-      : null;
+    const inLyrics = renderSong && renderState === AppState.SONG_DETECTED_WITH_LYRICS;
+    const currentChunk = inLyrics ? this.lyricsManager.getCurrentChunk(position) : null;
+    const nextChunk = inLyrics ? this.lyricsManager.getNextChunk(position) : null;
+    const previousChunk = inLyrics ? this.lyricsManager.getPreviousChunk(position) : null;
 
     this.displayManager.displayFormatted(
       renderState,
@@ -319,6 +317,7 @@ export class UserSession {
       currentChunk,
       nextChunk,
       position,
+      previousChunk,
     );
 
     // Check if song ended

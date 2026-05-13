@@ -26,22 +26,23 @@ export class FiveLineDisplayFormatter {
     currentSong?: CurrentSong,
     currentChunk?: LyricsChunk | null,
     nextChunk?: LyricsChunk | null,
-    currentPosition?: number
+    currentPosition?: number,
+    previousChunk?: LyricsChunk | null,
   ): string[] {
     const lines: DisplayLine[] = [];
 
     switch (appState) {
       case AppState.LISTENING:
         return this.formatListening();
-        
+
       case AppState.PROCESSING:
         return this.formatProcessing();
-        
+
       case AppState.SONG_DETECTED_NO_LYRICS:
         return this.formatSongInfo(currentSong!, currentPosition || 0);
-        
+
       case AppState.SONG_DETECTED_WITH_LYRICS:
-        return this.formatLyricsDisplay(currentSong!, currentChunk, nextChunk, currentPosition || 0);
+        return this.formatLyricsDisplay(currentSong!, currentChunk, nextChunk, currentPosition || 0, previousChunk);
         
       default:
         return this.formatListening();
@@ -97,53 +98,59 @@ export class FiveLineDisplayFormatter {
     return lines;
   }
 
+  /**
+   * New 5-line layout for SONG_DETECTED_WITH_LYRICS:
+   *
+   *   Line 1: ♪ Song title          (truncated to one line, never wraps)
+   *   Line 2: previous lyric line   (read-along buffer above)
+   *   Line 3: - current lyric line  (the one we think is sung right now)
+   *   Line 4: next lyric line       (read-ahead buffer below)
+   *   Line 5: 0:42 / 3:12           (position / duration)
+   *
+   * The "-" prefix on line 3 tells the user which line we believe is
+   * active, so if our timing is off by a phrase the user can still
+   * follow along by reading the line above or below.
+   *
+   * Each lyric slot is pixel-fit to one HUD line. When a chunk
+   * naturally wraps to multiple lines we take just the first line of
+   * its wrapped content here — the user gets coverage by reading the
+   * surrounding context lines from prev/next chunks.
+   */
   private formatLyricsDisplay(
     song: CurrentSong,
     currentChunk?: LyricsChunk | null,
     nextChunk?: LyricsChunk | null,
-    position: number = 0
+    position: number = 0,
+    previousChunk?: LyricsChunk | null,
   ): string[] {
     const lines: string[] = [];
 
-    if (!currentChunk) {
-      // No current chunk, show song info
-      return this.formatSongInfo(song, position);
-    }
+    // Line 1: song title (truncated if it doesn't fit one line)
+    lines.push(this.fitOneLine(`♪ ${song.title}`));
 
-    // The chunker already wrapped these lines pixel-accurately for the
-    // G1's display width — pass them through verbatim. We just decide
-    // how many to show and what to put in the rest of the slots.
-    const hasMultipleLines = currentChunk.lines.length > 1;
+    // Line 2: previous lyric (empty at song start)
+    const prevText = previousChunk?.lines?.[0];
+    lines.push(prevText ? this.fitOneLine(prevText) : '');
 
-    if (hasMultipleLines) {
-      // Two-line chunk: most of the screen real estate goes to lyrics.
-      lines.push(currentChunk.lines[0]);
-      lines.push(currentChunk.lines[1]);
-      lines.push('-----');
-
-      if (nextChunk && nextChunk.lines.length > 0) {
-        lines.push(this.fitOneLine(nextChunk.lines[0]));
-      } else {
-        lines.push('');
-      }
+    // Line 3: current lyric (marked with "- ")
+    const curText = currentChunk?.lines?.[0];
+    if (curText) {
+      // Prepend marker, then fit. fitOneLine will truncate if needed.
+      lines.push(this.fitOneLine(`- ${curText}`));
     } else {
-      // Single-line chunk: leave the next-line slot blank so it doesn't
-      // crowd the active lyric, and use the bottom rows for preview.
-      lines.push(currentChunk.lines[0]);
-      lines.push('');
-
-      if (nextChunk) {
-        lines.push('-----');
-        lines.push(this.fitOneLine(nextChunk.lines[0]));
-      } else {
-        lines.push('');
-        lines.push('');
-      }
+      // Gap between phrases (or before first phrase): show an empty
+      // marker line so the title/prev/next stay in place visually.
+      lines.push('-');
     }
 
-    // Bottom row: time / duration (clamp to avoid overflow display)
+    // Line 4: next lyric (empty after the last phrase)
+    const nextText = nextChunk?.lines?.[0];
+    lines.push(nextText ? this.fitOneLine(nextText) : '');
+
+    // Line 5: clock — clamp position so we never show "4:45 / 4:40"
     const shownPosition = song.duration > 0 ? Math.min(position, song.duration) : position;
     lines.push(`${formatTimestamp(shownPosition)} / ${formatTimestamp(song.duration)}`);
+
     return lines;
   }
 

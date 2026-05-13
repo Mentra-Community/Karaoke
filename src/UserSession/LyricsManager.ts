@@ -129,12 +129,39 @@ export class LyricsManager {
     const currentIndex = this.currentChunks.findIndex(
       chunk => chunk.startTime === currentChunk.startTime
     );
-    
+
     if (currentIndex >= 0 && currentIndex < this.currentChunks.length - 1) {
       return this.currentChunks[currentIndex + 1];
     }
 
     return null;
+  }
+
+  /**
+   * The chunk that just finished, used as the "buffer above" line on
+   * the HUD so the user can read along even when our timing is a
+   * little ahead of the audio. If there's no active current chunk
+   * (gap between LRC lines), this returns the most-recently-passed
+   * chunk so the HUD doesn't go blank between phrases.
+   */
+  getPreviousChunk(position: number): LyricsChunk | null {
+    if (this.currentChunks.length === 0) return null;
+
+    const current = this.getCurrentChunk(position);
+
+    if (current) {
+      const idx = this.currentChunks.findIndex(c => c.startTime === current.startTime);
+      return idx > 0 ? this.currentChunks[idx - 1] : null;
+    }
+
+    // No active chunk → pick the most recently passed one.
+    let best: LyricsChunk | null = null;
+    for (const chunk of this.currentChunks) {
+      if (chunk.startTime <= position) {
+        if (!best || chunk.startTime > best.startTime) best = chunk;
+      }
+    }
+    return best;
   }
 
   clearCache(): void {

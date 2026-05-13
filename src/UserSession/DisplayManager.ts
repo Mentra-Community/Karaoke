@@ -171,7 +171,8 @@ export class DisplayManager {
     currentSong?: CurrentSong,
     currentChunk?: LyricsChunk | null,
     nextChunk?: LyricsChunk | null,
-    position?: number
+    position?: number,
+    previousChunk?: LyricsChunk | null,
   ): void {
     if (!this.useNewFormatter) {
       return;
@@ -182,7 +183,8 @@ export class DisplayManager {
       currentSong,
       currentChunk,
       nextChunk,
-      position
+      position,
+      previousChunk,
     );
 
     const formattedText = lines.join('\n');
