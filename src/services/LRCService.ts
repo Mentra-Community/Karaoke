@@ -80,10 +80,13 @@ export class LRCService {
   ];
 
   async fetchLRC(title: string, artist: string): Promise<string | null> {
-    // Build the search attempt list. We try the verbatim title/artist
-    // first (best precision), then a cleaned variant if it differs
-    // (handles "Sped Up 204", "Slowed + Reverb", etc.), and finally
-    // title-only as a last-resort fuzzier search.
+    // We race all search strategies in parallel and prefer the verbatim
+    // attempt's result when it succeeds; otherwise return whichever
+    // attempt resolves first with synced lyrics. Cuts the worst-case
+    // load time from sum-of-3-roundtrips (~1.5–3 s) down to one
+    // roundtrip (~300–500 ms).
+    //
+    // Priority order if multiple succeed: verbatim > cleaned > title-only.
     const attempts: Array<{title: string; artist: string; label: string}> = [
       {title, artist, label: 'verbatim'},
     ];
@@ -93,24 +96,29 @@ export class LRCService {
     if (cleanedTitle !== title || cleanedArtist !== artist) {
       attempts.push({title: cleanedTitle, artist: cleanedArtist, label: 'cleaned'});
     }
-
     if (cleanedTitle.length >= 3) {
       attempts.push({title: cleanedTitle, artist: '', label: 'title-only'});
     }
 
-    for (const source of this.sources) {
-      for (const attempt of attempts) {
-        try {
-          const lrc = await this.trySource(source, attempt.title, attempt.artist);
-          if (lrc) {
-            if (attempt.label !== 'verbatim') {
-              console.log(`LRC match via ${attempt.label} attempt: "${attempt.title}" / "${attempt.artist}"`);
-            }
-            return lrc;
-          }
-        } catch (error) {
-          console.error(`Error fetching from ${source.name} (${attempt.label}):`, error);
+    const source = this.sources[0]; // LRClib only for now
+
+    // Kick every attempt off concurrently. Each entry resolves to
+    // {lrc, label} on hit or null on miss/error.
+    const settled = await Promise.allSettled(
+      attempts.map(async (attempt) => {
+        const lrc = await this.trySource(source, attempt.title, attempt.artist);
+        return lrc ? {lrc, label: attempt.label} : null;
+      }),
+    );
+
+    // Prefer the earliest attempt that succeeded (verbatim wins ties).
+    for (let i = 0; i < attempts.length; i++) {
+      const r = settled[i];
+      if (r.status === 'fulfilled' && r.value) {
+        if (r.value.label !== 'verbatim') {
+          console.log(`LRC match via ${r.value.label} attempt: "${attempts[i].title}" / "${attempts[i].artist}"`);
         }
+        return r.value.lrc;
       }
     }
     return null;

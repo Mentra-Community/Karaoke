@@ -37,6 +37,19 @@ export class UserSession {
    */
   lyricsOffsetSeconds: number = 0;
 
+  /**
+   * When true (default), periodic ACR re-recognitions can recalibrate
+   * the PositionTracker if drift is detected. When false the user
+   * has manually aligned lyrics via the nudge controls and wants the
+   * alignment locked — we skip recalibration so ACR can't snap the
+   * clock back and undo their adjustment.
+   *
+   * Auto-flips to false on the first manual nudge (they wouldn't be
+   * nudging if auto-sync was working). The webview toggles it back
+   * on via /api/auto-sync.
+   */
+  autoSyncEnabled: boolean = true;
+
   recognitionManager: RecognitionManager;
   lyricsManager: LyricsManager;
   positionTracker: PositionTracker;
@@ -305,6 +318,7 @@ export class UserSession {
 
     this.currentSong = newSong;
     this.lyricsOffsetSeconds = 0; // fresh song → start from no offset
+    this.autoSyncEnabled = true; // and let auto-sync drive again
     this.historyManager.addSong(newSong);
 
     // Fire-and-forget album art lookup. The webview reads via
@@ -539,7 +553,14 @@ export class UserSession {
           recalibrateThreshold,
         }, 'Periodic position check');
 
-        if (absDrift > recalibrateThreshold) {
+        // The user can disable auto-sync after manually nudging the
+        // offset — they explicitly want their alignment locked. Skip
+        // both the hard recalibrate and the weighted update in that
+        // case; the next nudge or song change is what reactivates
+        // adjustments.
+        if (!this.autoSyncEnabled) {
+          this.logger.debug({drift, autoSync: false}, 'Position drift observed but auto-sync is locked off');
+        } else if (absDrift > recalibrateThreshold) {
           this.logger.info({drift, inFresh}, 'Position drift exceeds threshold, recalibrating');
           this.positionTracker.recalibrate(
             detected,
@@ -550,9 +571,6 @@ export class UserSession {
         } else {
           // Even when we don't hard-recalibrate, feed the sample to
           // the tracker so its weighted drift estimate stays warm.
-          // validatePosition is a no-op side-effect read; let
-          // recalibrate handle the bookkeeping with its built-in
-          // hysteresis (MAX_DRIFT_SECONDS guard inside).
           this.positionTracker.recalibrate(
             detected,
             Date.now(),
@@ -564,17 +582,27 @@ export class UserSession {
         this.recognitionManager.updateLastConfidentRecognition();
       }
     } else {
-      // Different song detected
-      if (result.confidence < this.config.CONFIDENCE_THRESHOLD_SWITCH) {
+      // Different song detected. We used to ignore anything under
+      // CONFIDENCE_THRESHOLD_SWITCH (0.75) here, which made playlist
+      // transitions feel laggy — the user'd see the WRONG lyrics for
+      // 10–20 s before the next ACR sample caught up at a high enough
+      // confidence. Now we ENTER pending-switch on anything above
+      // NO_SONG (0.30) and let handleSwitchPendingState verify at the
+      // 5 s VERIFY interval. The VERIFY confidence threshold (0.5)
+      // still gates the actual transition, so we don't false-switch
+      // off a low-confidence one-off.
+      if (result.confidence < this.config.CONFIDENCE_THRESHOLD_NO_SONG) {
         this.logger.debug({
           confidence: result.confidence,
-          threshold: this.config.CONFIDENCE_THRESHOLD_SWITCH
-        }, 'Confidence too low for song switch');
+          threshold: this.config.CONFIDENCE_THRESHOLD_NO_SONG
+        }, 'Confidence too low to even consider switch');
         return;
       }
-      
-      // Mark for verification (even high confidence to prevent jarring switches)
-      this.logger.info({}, 'Different song detected, pending switch verification');
+
+      this.logger.info({
+        detected: `${result.title} — ${result.artist}`,
+        confidence: result.confidence,
+      }, 'Different song detected, pending switch verification');
       this.recognitionManager.setState(RecognitionState.SONG_SWITCH_PENDING);
       this.recognitionManager.setPendingRecognition({
         song: {
@@ -587,7 +615,7 @@ export class UserSession {
         timestamp: Date.now(),
         offsetSeconds: result.offsetSeconds
       });
-      // Keep showing current song/lyrics - no interruption
+      // Keep showing current song/lyrics until verification confirms.
     }
   }
   
@@ -712,6 +740,7 @@ export class UserSession {
         hasLyrics: song.hasLyrics,
         lyricsLoading: song.lyricsLoading,
         lyricsOffsetSeconds: this.lyricsOffsetSeconds,
+        autoSyncEnabled: this.autoSyncEnabled,
         artworkUrl: this.artworkService.peek(song.title, song.artist) ?? null,
         lrcId: this.lyricsManager.getCurrentLRCId(),
       } : null,
@@ -727,6 +756,7 @@ export class UserSession {
    */
   getLiveLyrics(): {
     position: number;
+    previous: {lines: string[]; startTime: number; endTime: number} | null;
     current: {lines: string[]; startTime: number; endTime: number} | null;
     next: {lines: string[]; startTime: number; endTime: number} | null;
   } | null {
@@ -735,23 +765,39 @@ export class UserSession {
     }
     const position = this.positionTracker.getCurrentPosition();
     const lookupPos = position + this.lyricsOffsetSeconds;
+    const previous = this.lyricsManager.getPreviousChunk(lookupPos);
     const current = this.lyricsManager.getCurrentChunk(lookupPos);
     const next = this.lyricsManager.getNextChunk(lookupPos);
+    const proj = (c: {lines: string[]; startTime: number; endTime: number} | null) =>
+      c ? {lines: c.lines, startTime: c.startTime, endTime: c.endTime} : null;
     return {
       position,
-      current: current ? {lines: current.lines, startTime: current.startTime, endTime: current.endTime} : null,
-      next: next ? {lines: next.lines, startTime: next.startTime, endTime: next.endTime} : null,
+      previous: proj(previous),
+      current: proj(current),
+      next: proj(next),
     };
   }
 
   /**
    * Adjust the lyric-vs-audio offset by `deltaSeconds`. Positive
    * pushes lyrics ahead (use when lyrics are lagging the audio).
-   * Returns the new total offset.
+   * Returns the new total offset. Also flips auto-sync OFF — the
+   * user clearly knows what alignment they want, don't let periodic
+   * ACR recalibrations undo it.
    */
   nudgeLyricsOffset(deltaSeconds: number): number {
     this.lyricsOffsetSeconds = Math.max(-30, Math.min(30, this.lyricsOffsetSeconds + deltaSeconds));
-    this.logger.info({offset: this.lyricsOffsetSeconds, delta: deltaSeconds}, 'Lyrics offset nudged');
+    this.autoSyncEnabled = false;
+    this.logger.info(
+      {offset: this.lyricsOffsetSeconds, delta: deltaSeconds, autoSync: false},
+      'Lyrics offset nudged — auto-sync disabled to lock alignment',
+    );
     return this.lyricsOffsetSeconds;
+  }
+
+  setAutoSync(enabled: boolean): boolean {
+    this.autoSyncEnabled = !!enabled;
+    this.logger.info({autoSync: this.autoSyncEnabled}, 'Auto-sync toggled');
+    return this.autoSyncEnabled;
   }
 }

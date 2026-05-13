@@ -119,6 +119,20 @@ export function setupWebviewRoutes(app: KaraokeApp): void {
     return c.json({title, artist, favorite})
   })
 
+  // Lock or re-enable auto-sync. When off, periodic ACR re-recognition
+  // stops touching the PositionTracker — the user's manual nudge
+  // sticks. Body: {enabled: boolean}.
+  app.post("/api/auto-sync", async (c: MentraAuthHonoContext) => {
+    const userId = c.get("authUserId")
+    if (!userId) return c.json({error: "Not authenticated"}, 401)
+    const session = app.getSessionByUserId(userId)
+    if (!session) return c.json({error: "No active session"}, 404)
+    let body: {enabled?: unknown}
+    try { body = await c.req.json() } catch { return c.json({error: "Invalid JSON body"}, 400) }
+    const enabled = !!body.enabled
+    return c.json({autoSyncEnabled: session.setAutoSync(enabled)})
+  })
+
   // Force an immediate ACR re-fingerprint. The "Resync" button in
   // the webview hits this when lyrics have drifted but auto-correct
   // hasn't fired (drift below threshold, stale buffer, etc.).

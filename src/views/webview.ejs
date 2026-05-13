@@ -86,27 +86,37 @@
                     <button class="text-btn" id="versions-btn">Wrong version?</button>
                 </div>
 
-                <!-- Lyric/audio offset nudge. Each tap shifts the LRC
-                     lookup by ±1 / ±5 seconds. The middle button shows
-                     the active offset and resets to 0 when tapped. -->
+                <!-- Lyric/audio offset nudge. Two buttons (minus pushes
+                     lyrics later, plus pulls them earlier) plus a
+                     readout, plus an Auto-sync lock toggle. -->
                 <div class="np-nudge" id="np-nudge" hidden>
                     <span class="nudge-label">Lyrics</span>
-                    <button class="nudge-btn" data-delta="-5" title="Push lyrics 5s later">−5s</button>
-                    <button class="nudge-btn" data-delta="-1" title="Push lyrics 1s later">−1s</button>
+                    <button class="nudge-btn" data-delta="-1" title="Lyrics are too early — push them 1s later">−</button>
                     <button class="nudge-zero" id="nudge-zero" title="Reset offset to 0">0.0s</button>
-                    <button class="nudge-btn" data-delta="1" title="Pull lyrics 1s earlier">+1s</button>
-                    <button class="nudge-btn" data-delta="5" title="Pull lyrics 5s earlier">+5s</button>
+                    <button class="nudge-btn" data-delta="1" title="Lyrics are too late — pull them 1s earlier">+</button>
+                    <button class="autosync-toggle" id="autosync-toggle" data-on="yes" title="Auto-sync re-aligns lyrics on each ACR check. Lock it off to keep your manual offset.">
+                        <span class="autosync-dot"></span>
+                        <span id="autosync-label">Auto-sync</span>
+                    </button>
                 </div>
             </section>
 
+            <!-- 3-line karaoke card: previous lyric on top, current
+                 highlighted with a "&gt;" gutter, next lyric below. Mirrors
+                 the glasses HUD so what the user sees on the phone
+                 matches what they see on the device. -->
             <section class="lyrics" id="lyrics-section" hidden>
                 <p class="np-eyebrow">Lyrics</p>
                 <div class="lyrics-card">
-                    <div class="lyrics-current" id="lyrics-current"></div>
+                    <div class="lyrics-row lyrics-row-prev" id="lyrics-prev"></div>
+                    <div class="lyrics-row lyrics-row-cur">
+                        <span class="lyrics-gutter">&gt;</span>
+                        <span class="lyrics-text" id="lyrics-cur"></span>
+                    </div>
+                    <div class="lyrics-row lyrics-row-next" id="lyrics-next"></div>
                     <div class="lyrics-progress">
                         <div class="lyrics-progress-bar" id="lyrics-progress-bar"></div>
                     </div>
-                    <div class="lyrics-next" id="lyrics-next"></div>
                 </div>
             </section>
         </section>
@@ -185,9 +195,12 @@
         const versionsList = $("versions-list");
         const versionsSub = $("versions-sub");
         const lyricsSection = $("lyrics-section");
-        const lyricsCurrent = $("lyrics-current");
+        const lyricsPrev = $("lyrics-prev");
+        const lyricsCur = $("lyrics-cur");
         const lyricsNext = $("lyrics-next");
         const lyricsProgressBar = $("lyrics-progress-bar");
+        const autosyncToggle = $("autosync-toggle");
+        const autosyncLabel = $("autosync-label");
 
         // ─── History refs ────────────────────────────────────────────
         const historyFeed = $("history-feed");
@@ -295,6 +308,13 @@
             nudgeZero.textContent = `${sign}${Math.abs(off).toFixed(1)}s`;
             nudgeZero.dataset.zero = off === 0 ? "yes" : "no";
 
+            // Auto-sync lock toggle. When the user nudges, the server
+            // flips this off automatically; the user can re-enable to
+            // let periodic ACR recalibration take over again.
+            const auto = song.autoSyncEnabled !== false;
+            autosyncToggle.dataset.on = auto ? "yes" : "no";
+            autosyncLabel.textContent = auto ? "Auto-sync" : "Locked";
+
             // Album artwork
             if (song.artworkUrl) {
                 if (npArt.src !== song.artworkUrl) {
@@ -309,27 +329,36 @@
             }
         }
 
+        function firstLineOf(chunk) {
+            if (!chunk || !chunk.lines || chunk.lines.length === 0) return "";
+            return chunk.lines[0];
+        }
+
         function applyLyrics(lyrics) {
-            if (!lyrics || !lyrics.current) {
+            // No lyrics + no current chunk = hide the card entirely. We
+            // still show the card if we have a previous or next line —
+            // the user wants the context even during between-line gaps.
+            if (!lyrics || (!lyrics.current && !lyrics.previous && !lyrics.next)) {
                 lyricsSection.hidden = true;
                 return;
             }
             lyricsSection.hidden = false;
-            const cur = lyrics.current;
-            lyricsCurrent.innerHTML = cur.lines
-                .map((line) => `<p class="lyrics-line">${escapeHtml(line) || "&nbsp;"}</p>`)
-                .join("");
-            if (lyrics.next && lyrics.next.lines.length > 0) {
-                lyricsNext.innerHTML = lyrics.next.lines
-                    .slice(0, 2)
-                    .map((line) => `<p class="lyrics-line-next">${escapeHtml(line) || "&nbsp;"}</p>`)
-                    .join("");
+
+            // 3-line karaoke layout: prev (dim), current (bright, with
+            // ">" gutter), next (dim). Matches the glasses HUD.
+            lyricsPrev.textContent = firstLineOf(lyrics.previous);
+            lyricsCur.textContent = firstLineOf(lyrics.current) || " ";
+            lyricsNext.textContent = firstLineOf(lyrics.next);
+
+            // Progress bar still tracks the current chunk's time span.
+            if (lyrics.current) {
+                const cur = lyrics.current;
+                const span = Math.max(0.01, cur.endTime - cur.startTime);
+                const through = Math.max(0, Math.min(1, (lyrics.position - cur.startTime) / span));
+                lyricsProgressBar.style.transform = `scaleX(${through})`;
             } else {
-                lyricsNext.innerHTML = "";
+                lyricsProgressBar.style.transform = "scaleX(0)";
             }
-            const span = Math.max(0.01, cur.endTime - cur.startTime);
-            const through = Math.max(0, Math.min(1, (lyrics.position - cur.startTime) / span));
-            lyricsProgressBar.style.transform = `scaleX(${through})`;
         }
 
         function setNowPlayingFav(isFav) {
@@ -541,6 +570,26 @@
                 return;
             }
             if (ev.target === nudgeZero) setOffset({absolute: 0});
+        });
+
+        // Auto-sync lock toggle.
+        autosyncToggle.addEventListener("click", async () => {
+            const currentlyOn = autosyncToggle.dataset.on === "yes";
+            const next = !currentlyOn;
+            autosyncToggle.dataset.on = next ? "yes" : "no";
+            autosyncLabel.textContent = next ? "Auto-sync" : "Locked";
+            try {
+                await fetch("/api/auto-sync", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    credentials: "include",
+                    body: JSON.stringify({enabled: next}),
+                });
+            } catch (_) {
+                // revert visual on failure
+                autosyncToggle.dataset.on = currentlyOn ? "yes" : "no";
+                autosyncLabel.textContent = currentlyOn ? "Auto-sync" : "Locked";
+            }
         });
 
         // ─── Wrong version? sheet ────────────────────────────────────
