@@ -1,0 +1,254 @@
+diff --git a/dist/index.js b/dist/index.js
+index 494c2cbbb0f7dec16c3f5d4f5256557269fa519c..2e0a3e13192e9a6a4dd6fedaed4fe2f2e625f9a1 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -3528,7 +3528,13 @@ class StorageManager {
+     const serverUrl = this.deps.getServerUrl?.() ?? null;
+     if (!serverUrl)
+       return "http://localhost:8002";
+-    return serverUrl.replace(/\/app-ws$/, "").replace(/^ws/, "http");
++    try {
++      const u = new URL(serverUrl);
++      const proto = u.protocol === "wss:" ? "https:" : "http:";
++      return `${proto}//${u.host}`;
++    } catch {
++      return serverUrl.replace(/\/app-ws$/, "").replace(/^ws/, "http");
++    }
+   }
+   getAuthHeaders() {
+     return {
+@@ -6789,7 +6795,13 @@ class SimpleStorage {
+     const serverUrl = this.appSession.getServerUrl();
+     if (!serverUrl)
+       return "http://localhost:8002";
+-    return serverUrl.replace(/\/app-ws$/, "").replace(/^ws/, "http");
++    try {
++      const u = new URL(serverUrl);
++      const proto = u.protocol === "wss:" ? "https:" : "http:";
++      return `${proto}//${u.host}`;
++    } catch {
++      return serverUrl.replace(/\/app-ws$/, "").replace(/^ws/, "http");
++    }
+   }
+   getAuthHeaders() {
+     const apiKey = this.appSession.config?.apiKey || "unknown-api-key";
+@@ -7613,9 +7625,14 @@ class AppSession {
+   static convertToHttps(rawUrl) {
+     if (!rawUrl)
+       return "";
+-    let url = rawUrl.replace(/^wss?:\/\//, "");
+-    url = url.replace(/\/app-ws$/, "");
+-    return `https://${url}`;
++    try {
++      const u = new URL(rawUrl);
++      return `https://${u.host}`;
++    } catch {
++      let url = rawUrl.replace(/^wss?:\/\//, "");
++      url = url.replace(/\/app-ws$/, "");
++      return `https://${url}`;
++    }
+   }
+   getDefaultSettings() {
+     if (!this.appConfig) {
+@@ -7940,7 +7957,14 @@ class AppSession {
+       return;
+     }
+     try {
+-      const cloudBase = baseUrl.replace(/\/app-ws.*$/, "");
++      let cloudBase;
++      try {
++        const u = new URL(baseUrl);
++        const proto = u.protocol === "wss:" ? "https:" : (u.protocol === "ws:" ? "http:" : u.protocol);
++        cloudBase = `${proto}//${u.host}`;
++      } catch {
++        cloudBase = baseUrl.replace(/\/app-ws.*$/, "");
++      }
+       const url = `${cloudBase}/api/incidents/${incidentId}/logs`;
+       await axios.post(url, payload, {
+         headers: {
+@@ -9758,9 +9782,14 @@ class _V2SessionShim {
+     const serverUrl = this.session.getServerUrl();
+     if (!serverUrl)
+       return null;
+-    let url = serverUrl.replace(/^wss?:\/\//, "");
+-    url = url.replace(/\/app-ws$/, "");
+-    return `https://${url}`;
++    try {
++      const u = new URL(serverUrl);
++      return `https://${u.host}`;
++    } catch {
++      let url = serverUrl.replace(/^wss?:\/\//, "");
++      url = url.replace(/\/app-ws$/, "");
++      return `https://${url}`;
++    }
+   }
+   getWifiStatus() {
+     return {
+diff --git a/node_modules/@mentra/types/README.md b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/README.md
+deleted file mode 100644
+index a1deec924c81edfe66356c492f10a1a72486dab6..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/applet.d.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/applet.d.ts
+deleted file mode 100644
+index 1da85c6bd1e6eba60d2c5ed1985c550b0d736fb0..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/applet.d.ts.map b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/applet.d.ts.map
+deleted file mode 100644
+index 7af434857d5c40834fefbd70b4694b3630231f87..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/applet.js b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/applet.js
+deleted file mode 100644
+index b46d9e0fdd6f3cb650a96c82b9abdbcf36f313c9..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/even-realities-g1.d.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/even-realities-g1.d.ts
+deleted file mode 100644
+index a07102aa1d43501b380cc30e445e4dc0c90c7cfe..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/even-realities-g1.d.ts.map b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/even-realities-g1.d.ts.map
+deleted file mode 100644
+index 7639662f42db97e25b774f2ae057d6632afb91a0..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/even-realities-g1.js b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/even-realities-g1.js
+deleted file mode 100644
+index 631880b358de44ce5b2948b821671b03e93c9feb..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/even-realities-g2.d.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/even-realities-g2.d.ts
+deleted file mode 100644
+index f20809d381a706d7645e5af88ba6a3dac9c60c71..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/even-realities-g2.d.ts.map b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/even-realities-g2.d.ts.map
+deleted file mode 100644
+index 77e9d036c2a3df741b7847e5db30973865e31aa1..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/even-realities-g2.js b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/even-realities-g2.js
+deleted file mode 100644
+index f7a261ae5b8ae3bb3dbf25a0aa6cecc8fd44db7b..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/mentra-display.d.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/mentra-display.d.ts
+deleted file mode 100644
+index ac3d6033edb6296ae71a9f11075dd7f1046d47b6..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/mentra-display.d.ts.map b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/mentra-display.d.ts.map
+deleted file mode 100644
+index d78d6f75bce52728f4a62248c35ae88c3f4c2dc3..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/mentra-display.js b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/mentra-display.js
+deleted file mode 100644
+index 9e3fe93d0240398801cc47c3f7341ea6acbdb641..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/mentra-live.d.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/mentra-live.d.ts
+deleted file mode 100644
+index 1ad706dc6418b804081de39def0eb0d9f7b855fd..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/mentra-live.d.ts.map b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/mentra-live.d.ts.map
+deleted file mode 100644
+index c6ec02b3e83f23827ad5011bf19ffd9e4f9cf04f..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/mentra-live.js b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/mentra-live.js
+deleted file mode 100644
+index d06eb2191dd033bcba5cd9914e76aac41112f8ed..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/none.d.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/none.d.ts
+deleted file mode 100644
+index 8e5a7d2b4fc3946983f22e20c91c96cc940ea0bc..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/none.d.ts.map b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/none.d.ts.map
+deleted file mode 100644
+index 64dd9fedbb27e016162e9e5afdd67f3ba86083bf..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/none.js b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/none.js
+deleted file mode 100644
+index 7ec1a7158ad97de9a0dbee1e76fc7ae64a67b029..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/simulated-glasses.d.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/simulated-glasses.d.ts
+deleted file mode 100644
+index ce9884f27f4608be303f1116dbcf3c1e6e8eb75c..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/simulated-glasses.d.ts.map b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/simulated-glasses.d.ts.map
+deleted file mode 100644
+index 6f3423be17f12cf84ef2ea4d9dd6a9e9e16d3296..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/simulated-glasses.js b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/simulated-glasses.js
+deleted file mode 100644
+index 00238d7a6fe5826291340f25d67c9ac030e23b04..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/vuzix-z100.d.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/vuzix-z100.d.ts
+deleted file mode 100644
+index a734d6580d20088d4837b48f201acddd57bb1960..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/vuzix-z100.d.ts.map b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/vuzix-z100.d.ts.map
+deleted file mode 100644
+index b2f07394d0fc324df61ab49d238235433b3a4325..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/capabilities/vuzix-z100.js b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/capabilities/vuzix-z100.js
+deleted file mode 100644
+index c736bdacd22f95242781977d899fc1e5e8c6c32f..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/cli.d.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/cli.d.ts
+deleted file mode 100644
+index 1937ce8a57af264061af5c77c4332c1a4a0cff40..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/cli.d.ts.map b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/cli.d.ts.map
+deleted file mode 100644
+index 1889aeffd04b82c935732e6c876cf4c93f249877..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/cli.js b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/cli.js
+deleted file mode 100644
+index 4968d2581be57153c627f6c5c747d4151764606e..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/device.d.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/device.d.ts
+deleted file mode 100644
+index 80aa384b1f749e08fd82ce46f7e16ef57ac9dbe5..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/device.d.ts.map b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/device.d.ts.map
+deleted file mode 100644
+index 011257100eded1c0fcf7e3bd6932c28717cbf7b8..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/device.js b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/device.js
+deleted file mode 100644
+index a621e9198c121bfaa0a6af119ca773fac869eac0..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/enums.d.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/enums.d.ts
+deleted file mode 100644
+index 8682ca9434ab94b45c3c3cf55b573cb535e97927..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/enums.d.ts.map b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/enums.d.ts.map
+deleted file mode 100644
+index a73d7812be20c7b41af07d1cb3b1fe3940789ce0..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/enums.js b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/enums.js
+deleted file mode 100644
+index e33c389e766762f5487413a31d155ce83d64a59e..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/hardware.d.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/hardware.d.ts
+deleted file mode 100644
+index 8c71897d35977e32a25f70fd6dc22e82719a8775..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/hardware.d.ts.map b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/hardware.d.ts.map
+deleted file mode 100644
+index 4ea851c69910ff2cc6ce543c2913e3bfdcb7f3c1..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/hardware.js b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/hardware.js
+deleted file mode 100644
+index 9b77de83e63eb5d687e3a3a6dd3972bce3120958..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/index.d.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/index.d.ts
+deleted file mode 100644
+index 99451b371f1d7f31039776d600006a4c63ff9b11..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/index.d.ts.map b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/index.d.ts.map
+deleted file mode 100644
+index 716e8c65c2e395086af58f151d3d02b3c5996053..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/dist/index.js b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/dist/index.js
+deleted file mode 100644
+index 8492871733942caa797400ac04655ec64edc738d..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/package.json b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/package.json
+deleted file mode 100644
+index ad6059782730096c184d984fe6f69bb2ec12464d..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/src/applet.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/src/applet.ts
+deleted file mode 100644
+index cb84330711688cef9a81805f4d2d66272ba7811e..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/src/capabilities/even-realities-g1.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/src/capabilities/even-realities-g1.ts
+deleted file mode 100644
+index 16ba5fab0723a6205525fadabd72b0b2a6c9425d..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/src/capabilities/even-realities-g2.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/src/capabilities/even-realities-g2.ts
+deleted file mode 100644
+index d3cf82fefcdac79c8c793aafca8959bb78741029..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/src/capabilities/mentra-display.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/src/capabilities/mentra-display.ts
+deleted file mode 100644
+index 7618ec5c87bb0d9c94a1b3987bdd97f8425a707c..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/src/capabilities/mentra-live.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/src/capabilities/mentra-live.ts
+deleted file mode 100644
+index b86c9474d1ca11a5836a3e542a5013215f8eb11b..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/src/capabilities/none.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/src/capabilities/none.ts
+deleted file mode 100644
+index 6227b920fc68fae4d135471e02fed16e78797712..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/src/capabilities/simulated-glasses.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/src/capabilities/simulated-glasses.ts
+deleted file mode 100644
+index 6d39b3794aafa301eb1107c464e9f6fbd20958df..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/src/capabilities/vuzix-z100.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/src/capabilities/vuzix-z100.ts
+deleted file mode 100644
+index ed04f0dc1adaa57899d93ba9e802f4cceea8378c..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/src/cli.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/src/cli.ts
+deleted file mode 100644
+index 74b982c43ab93cf716c3e7e267059f1e0543990a..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/src/device.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/src/device.ts
+deleted file mode 100644
+index 7906800de092339002921d39fdcabad8f2ed9b33..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/src/enums.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/src/enums.ts
+deleted file mode 100644
+index 62fda432f3ff06263b896899597a4f3873df388e..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/src/hardware.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/src/hardware.ts
+deleted file mode 100644
+index 40b0fe4385346ddd6a2ed34782b63fe865c07ba3..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/src/index.ts b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/src/index.ts
+deleted file mode 100644
+index 6dfa2a3e19cf27f42629a1d58b87dcd1efa4f75a..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/tsconfig.json b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/tsconfig.json
+deleted file mode 100644
+index c99e490bf56bb29ea66c61db07b10480635467d4..0000000000000000000000000000000000000000
+diff --git a/node_modules/@mentra/types/tsconfig.tsbuildinfo b/Users/isaiah/.bun/install/cache/@mentra/sdk@3.0.0-97949749fb114083@@@1/node_modules/@mentra/types/tsconfig.tsbuildinfo
+deleted file mode 100644
+index 7c4bd31c7eb09089e22fa2598165a6c26ea42ada..0000000000000000000000000000000000000000

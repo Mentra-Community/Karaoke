@@ -27,5 +27,8 @@
     "@types/node": "^22.13.14",
     "@types/ws": "^8.18.0",
     "typescript": "^5.0.0"
+  },
+  "patchedDependencies": {
+    "@mentra/sdk@3.0.0-alpha.4": "patches/@mentra%2Fsdk@3.0.0-alpha.4.patch"
   }
 }

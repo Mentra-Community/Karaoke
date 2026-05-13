@@ -8,7 +8,6 @@ import { HistoryManager } from './HistoryManager';
 import { ACRCloudService } from '../services/ACRCloudService';
 import { LRCService } from '../services/LRCService';
 import { ArtworkService } from '../services/ArtworkService';
-import { CloudStorage } from '../services/CloudStorage';
 import { 
   RecognitionState, 
   PendingRecognition, 
@@ -42,8 +41,7 @@ export class UserSession {
     userId: string,
     sessionId: string,
     session: AppSession,
-    acrConfig: { host: string; accessKey: string; secretKey: string },
-    appConfig: { packageName: string; apiKey: string }
+    acrConfig: { host: string; accessKey: string; secretKey: string }
   ) {
     this.userId = userId;
     this.sessionId = sessionId;
@@ -74,17 +72,11 @@ export class UserSession {
     // storage. Fire-and-forget — calls during the warm-up window just
     // return what's in memory until this resolves.
     //
-    // We deliberately bypass session.simpleStorage. The SDK builds its
-    // REST base URL by stripping `/app-ws` from the WebSocket URL,
-    // which leaves `/ws/miniapp` in the path and 404s every call. Our
-    // CloudStorage wrapper rebuilds the base URL correctly. See
-    // docs/issues/007 (and remove the wrapper once the SDK fixes it).
-    const storage = new CloudStorage({
-      session,
-      packageName: appConfig.packageName,
-      apiKey: appConfig.apiKey,
-      logger: this.logger,
-    });
+    // session.simpleStorage works correctly thanks to the patched
+    // getBaseUrl in patches/@mentra/sdk*.patch (see docs/issues/007).
+    // When the SDK ships the fix upstream and we drop the patch, this
+    // path keeps working unchanged.
+    const storage = session.simpleStorage ?? null;
     this.historyManager.init(storage, this.logger).catch((err) => {
       this.logger.warn({err: err?.message}, 'HistoryManager hydration failed');
     });

@@ -23,6 +23,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "@mentra/sdk@3.0.0-alpha.4": "patches/@mentra%2Fsdk@3.0.0-alpha.4.patch",
+  },
   "packages": {
     "@borewit/text-codec": ["@borewit/text-codec@0.2.2", "", {}, "sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ=="],
 
