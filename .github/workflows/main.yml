@@ -1,14 +1,21 @@
+# Prod deploy is no longer automatic on push to main.
+#
+# To deploy to prod, trigger this workflow manually from the GitHub
+# Actions UI: "Deploy karaoke to prod" → Run workflow.
+#
+# Cluster 5692 is the new AWS prod cluster in project 15081.
+
+name: Deploy karaoke to prod
+
 on:
-  push:
-    branches:
-      - main
-name: Deploy to Porter
+  workflow_dispatch:
+
 jobs:
   porter-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set Github tag
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
