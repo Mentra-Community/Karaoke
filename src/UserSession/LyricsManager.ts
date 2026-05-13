@@ -8,9 +8,46 @@ export class LyricsManager {
   private cachedLRC = new Map<string, LRCLine[]>();
   private lrcService: LRCService;
   private currentChunks: LyricsChunk[] = [];
+  /** Which LRClib id the current chunks were built from, if any. Lets the
+   *  UI show "current version: <id>" and hide it from the alternatives list. */
+  private currentLRCId: number | null = null;
 
   constructor(lrcService: LRCService) {
     this.lrcService = lrcService;
+  }
+
+  getCurrentLRCId(): number | null {
+    return this.currentLRCId;
+  }
+
+  /**
+   * Replace the active LRC with one specified by LRClib id. Used by
+   * the webview's "Wrong version?" picker — the user has decided we
+   * picked the wrong cut and wants to switch.
+   *
+   * Returns the parsed LRC lines on success, null if the id isn't
+   * available or has no synced lyrics.
+   */
+  async switchToLRCById(id: number): Promise<LRCLine[] | null> {
+    const lrcContent = await this.lrcService.fetchById(id);
+    if (!lrcContent) return null;
+    const lines = this.processLRCText(lrcContent);
+    if (!lines) return null;
+    this.currentLRCId = id;
+    this.currentChunks = this.chunkLyrics(lines);
+    return lines;
+  }
+
+  /** Shared parse + preprocess pipeline used by fetchLyrics and switchToLRCById. */
+  private processLRCText(lrcContent: string): LRCLine[] | null {
+    const raw = parseLRC(lrcContent);
+    if (raw.length === 0) return null;
+    const analysis = analyzeLRCPatterns(raw);
+    if (analysis.recommendPreprocessing) {
+      const preprocessed = preprocessLRC(raw);
+      return preprocessed.lines;
+    }
+    return raw;
   }
 
   async fetchLyrics(song: CurrentSong): Promise<LRCLine[] | null> {

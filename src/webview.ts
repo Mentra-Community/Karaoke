@@ -10,6 +10,9 @@
  *   GET  /api/history      Persistent detection log for the History tab.
  *                          Query: ?limit=200&favoritesOnly=true
  *   POST /api/favorite     Toggle favorite for a {title, artist} pair.
+ *   POST /api/resync       Force an immediate ACR re-recognition.
+ *   GET  /api/versions     LRClib alternatives for the current song.
+ *   POST /api/lrc          Switch active LRC. Body: {lrcId: number}.
  *   GET  /api/display-log  Plain-text HUD frame audit (debug only).
  *
  * All routes read `authUserId` from the Hono context variables that
@@ -112,6 +115,54 @@ export function setupWebviewRoutes(app: KaraokeApp): void {
 
     const favorite = session.historyManager.toggleFavorite(title, artist)
     return c.json({title, artist, favorite})
+  })
+
+  // Force an immediate ACR re-fingerprint. The "Resync" button in
+  // the webview hits this when lyrics have drifted but auto-correct
+  // hasn't fired (drift below threshold, stale buffer, etc.).
+  app.post("/api/resync", async (c: MentraAuthHonoContext) => {
+    const userId = c.get("authUserId")
+    if (!userId) return c.json({error: "Not authenticated"}, 401)
+    const session = app.getSessionByUserId(userId)
+    if (!session) return c.json({error: "No active session"}, 404)
+    const out = await session.requestResync()
+    return c.json(out)
+  })
+
+  // Alternative LRC versions for the currently-playing song. Powers
+  // the "Wrong version?" picker. Returns LRClib hits ranked by
+  // synced-lyrics availability.
+  app.get("/api/versions", async (c: MentraAuthHonoContext) => {
+    const userId = c.get("authUserId")
+    if (!userId) return c.json({error: "Not authenticated"}, 401)
+    const session = app.getSessionByUserId(userId)
+    if (!session) return c.json({versions: []})
+    const versions = await session.getAlternativeVersions()
+    return c.json({versions})
+  })
+
+  // Swap the active LRC to a user-picked LRClib entry.
+  // Body: {lrcId: number}.
+  app.post("/api/lrc", async (c: MentraAuthHonoContext) => {
+    const userId = c.get("authUserId")
+    if (!userId) return c.json({error: "Not authenticated"}, 401)
+    const session = app.getSessionByUserId(userId)
+    if (!session) return c.json({error: "No active session"}, 404)
+
+    let body: {lrcId?: unknown}
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({error: "Invalid JSON body"}, 400)
+    }
+    const lrcId = typeof body.lrcId === "number" ? body.lrcId : parseInt(String(body.lrcId ?? ""), 10)
+    if (!Number.isFinite(lrcId)) {
+      return c.json({error: "lrcId must be a number"}, 400)
+    }
+
+    const ok = await session.switchLRCVersion(lrcId)
+    if (!ok) return c.json({error: "Could not load that LRC version"}, 422)
+    return c.json({lrcId, switched: true})
   })
 
   // Audit log of every frame pushed to the glasses HUD. Plain text,

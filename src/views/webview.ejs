@@ -63,6 +63,19 @@
                         </svg>
                     </button>
                 </div>
+
+                <div class="np-actions" id="np-actions" hidden>
+                    <button class="pill-btn" id="resync-btn" title="Re-recognize and snap to the current playback position">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3 12a9 9 0 0 1 15.5-6.36L21 8" />
+                            <path d="M21 3v5h-5" />
+                            <path d="M21 12a9 9 0 0 1-15.5 6.36L3 16" />
+                            <path d="M3 21v-5h5" />
+                        </svg>
+                        <span id="resync-label">Resync</span>
+                    </button>
+                    <button class="text-btn" id="versions-btn">Wrong version?</button>
+                </div>
             </section>
 
             <section class="lyrics" id="lyrics-section" hidden>
@@ -101,6 +114,26 @@
         </footer>
     </div>
 
+    <!-- Versions bottom sheet — opens when the user taps "Wrong version?" -->
+    <div class="sheet-backdrop" id="versions-backdrop" hidden></div>
+    <div class="sheet" id="versions-sheet" hidden role="dialog" aria-label="Pick the right version">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+            <div>
+                <h3 class="sheet-title">Pick the right version</h3>
+                <p class="sheet-sub" id="versions-sub">—</p>
+            </div>
+            <button class="sheet-close" id="versions-close" aria-label="Close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <div class="sheet-body" id="versions-list">
+            <p class="sheet-empty">Loading versions…</p>
+        </div>
+    </div>
+
     <script>
     (function () {
         const $ = (id) => document.getElementById(id);
@@ -119,6 +152,15 @@
         const songFavBtn = $("song-fav-btn");
         const npArt = $("np-art");
         const npArtPlaceholder = $("np-art-placeholder");
+        const npActions = $("np-actions");
+        const resyncBtn = $("resync-btn");
+        const resyncLabel = $("resync-label");
+        const versionsBtn = $("versions-btn");
+        const versionsBackdrop = $("versions-backdrop");
+        const versionsSheet = $("versions-sheet");
+        const versionsClose = $("versions-close");
+        const versionsList = $("versions-list");
+        const versionsSub = $("versions-sub");
         const lyricsSection = $("lyrics-section");
         const lyricsCurrent = $("lyrics-current");
         const lyricsNext = $("lyrics-next");
@@ -194,12 +236,14 @@
             if (!song) {
                 npEmpty.hidden = false;
                 npActive.hidden = true;
+                npActions.hidden = true;
                 currentSongRef = null;
                 songFavBtn.hidden = true;
                 return;
             }
             npEmpty.hidden = true;
             npActive.hidden = false;
+            npActions.hidden = false;
             songTitle.textContent = song.title || "Unknown";
             songArtist.textContent = song.artist || "Unknown artist";
             songPosition.textContent = fmtTime(song.position);
@@ -396,6 +440,111 @@
         // Now Playing heart button
         songFavBtn.addEventListener("click", () => {
             if (currentSongRef) toggleFavorite(currentSongRef.title, currentSongRef.artist);
+        });
+
+        // ─── Resync ──────────────────────────────────────────────────
+        let resyncInFlight = false;
+        resyncBtn.addEventListener("click", async () => {
+            if (resyncInFlight) return;
+            resyncInFlight = true;
+            resyncBtn.disabled = true;
+            resyncLabel.textContent = "Resyncing…";
+            try {
+                const r = await fetch("/api/resync", {method: "POST", credentials: "include"});
+                if (!r.ok) throw new Error(r.statusText);
+                const data = await r.json();
+                resyncLabel.textContent = data.recognized ? "Synced ✓" : "No match";
+                setTimeout(() => { resyncLabel.textContent = "Resync"; }, 1800);
+            } catch (_) {
+                resyncLabel.textContent = "Try again";
+                setTimeout(() => { resyncLabel.textContent = "Resync"; }, 1800);
+            } finally {
+                resyncBtn.disabled = false;
+                resyncInFlight = false;
+            }
+        });
+
+        // ─── Wrong version? sheet ────────────────────────────────────
+        function openSheet() {
+            versionsBackdrop.hidden = false;
+            versionsSheet.hidden = false;
+            // Defer so the transition runs from hidden → visible
+            requestAnimationFrame(() => {
+                versionsBackdrop.classList.add("is-open");
+                versionsSheet.classList.add("is-open");
+            });
+        }
+        function closeSheet() {
+            versionsBackdrop.classList.remove("is-open");
+            versionsSheet.classList.remove("is-open");
+            setTimeout(() => {
+                versionsBackdrop.hidden = true;
+                versionsSheet.hidden = true;
+            }, 200);
+        }
+
+        async function loadVersions() {
+            versionsList.innerHTML = '<p class="sheet-empty">Loading versions…</p>';
+            if (currentSongRef) {
+                versionsSub.textContent = `${currentSongRef.title} — ${currentSongRef.artist}`;
+            } else {
+                versionsSub.textContent = "No song detected.";
+            }
+            try {
+                const r = await fetch("/api/versions", {credentials: "include"});
+                if (!r.ok) throw new Error(r.statusText);
+                const data = await r.json();
+                const versions = data.versions || [];
+                if (versions.length === 0) {
+                    versionsList.innerHTML = '<p class="sheet-empty">No alternatives found on LRClib.</p>';
+                    return;
+                }
+                versionsList.innerHTML = versions.map((v) => {
+                    const dur = (typeof v.duration === "number") ? fmtTime(v.duration) : "?";
+                    const synced = v.hasSyncedLyrics
+                        ? '<span class="ver-tag ver-tag-on">synced</span>'
+                        : '<span class="ver-tag">plain only</span>';
+                    return `
+                        <button class="ver-row" data-id="${v.id}" ${v.hasSyncedLyrics ? "" : "disabled"}>
+                            <div class="ver-text">
+                                <span class="ver-title">${escapeHtml(v.trackName)}</span>
+                                <span class="ver-artist">${escapeHtml(v.artistName)}${v.albumName ? " · " + escapeHtml(v.albumName) : ""}</span>
+                                ${v.preview ? `<span class="ver-preview">${escapeHtml(v.preview)}…</span>` : ""}
+                            </div>
+                            <div class="ver-side">
+                                ${synced}
+                                <span class="ver-duration">${dur}</span>
+                            </div>
+                        </button>
+                    `;
+                }).join("");
+            } catch (_) {
+                versionsList.innerHTML = '<p class="sheet-empty">Could not load alternatives.</p>';
+            }
+        }
+
+        async function pickVersion(lrcId) {
+            try {
+                const r = await fetch("/api/lrc", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    credentials: "include",
+                    body: JSON.stringify({lrcId}),
+                });
+                if (!r.ok) return;
+                closeSheet();
+                tick(); // refresh now-playing immediately
+            } catch (_) {}
+        }
+
+        versionsBtn.addEventListener("click", () => { openSheet(); loadVersions(); });
+        versionsClose.addEventListener("click", closeSheet);
+        versionsBackdrop.addEventListener("click", closeSheet);
+        versionsList.addEventListener("click", (ev) => {
+            const row = ev.target.closest(".ver-row");
+            if (!row || row.disabled) return;
+            const id = parseInt(row.dataset.id, 10);
+            if (Number.isFinite(id)) pickVersion(id);
         });
 
         // ─── Polling ─────────────────────────────────────────────────

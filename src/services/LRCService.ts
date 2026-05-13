@@ -53,6 +53,22 @@ export function cleanTrackTitle(input: string): string {
   return s.replace(/\s+/g, ' ').trim();
 }
 
+/** A single LRC entry surfaced to the UI. id+syncedLyrics is enough
+ *  for the user to switch to it; the rest is metadata for picking. */
+export interface LRCVersion {
+  /** LRClib's numeric id, used by /api/get/<id> */
+  id: number;
+  trackName: string;
+  artistName: string;
+  albumName?: string;
+  /** Track duration in seconds as reported by LRClib. */
+  duration?: number;
+  /** True iff this entry has timed lyrics (we filter to these). */
+  hasSyncedLyrics: boolean;
+  /** First 80 chars of plain lyrics, for a preview in the picker. */
+  preview: string;
+}
+
 export class LRCService {
   private sources: LRCSource[] = [
     {
@@ -98,6 +114,84 @@ export class LRCService {
       }
     }
     return null;
+  }
+
+  /**
+   * Return every LRClib hit (with synced lyrics first) so the user
+   * can pick the right cut when the auto-selected one is wrong.
+   * Searches verbatim, then cleaned, then title-only; dedupes by id.
+   */
+  async searchAlternatives(title: string, artist: string): Promise<LRCVersion[]> {
+    const source = this.sources[0]; // LRClib only for now
+    const seen = new Set<number>();
+    const out: LRCVersion[] = [];
+
+    const cleanedTitle = cleanTrackTitle(title);
+    const cleanedArtist = cleanTrackTitle(artist);
+    const queries: Array<{title: string; artist: string}> = [
+      {title, artist},
+    ];
+    if (cleanedTitle !== title || cleanedArtist !== artist) {
+      queries.push({title: cleanedTitle, artist: cleanedArtist});
+    }
+    if (cleanedTitle.length >= 3) {
+      queries.push({title: cleanedTitle, artist: ''});
+    }
+
+    for (const q of queries) {
+      try {
+        const params: Record<string, string> = {track_name: q.title};
+        if (q.artist) params.artist_name = q.artist;
+        const res = await fetch(`${source.url}${source.searchEndpoint}?` + new URLSearchParams(params));
+        if (!res.ok) continue;
+        const arr = (await res.json()) as Array<{
+          id: number;
+          trackName?: string;
+          artistName?: string;
+          albumName?: string;
+          duration?: number;
+          syncedLyrics?: string | null;
+          plainLyrics?: string | null;
+        }>;
+        if (!Array.isArray(arr)) continue;
+        for (const r of arr) {
+          if (!r.id || seen.has(r.id)) continue;
+          seen.add(r.id);
+          out.push({
+            id: r.id,
+            trackName: r.trackName ?? "",
+            artistName: r.artistName ?? "",
+            albumName: r.albumName,
+            duration: r.duration,
+            hasSyncedLyrics: !!r.syncedLyrics,
+            preview: (r.plainLyrics ?? "").slice(0, 80).replace(/\s+/g, " ").trim(),
+          });
+        }
+        if (out.length >= 20) break;
+      } catch {
+        // try next query
+      }
+    }
+
+    // Synced first, then by closest title match.
+    out.sort((a, b) => {
+      if (a.hasSyncedLyrics !== b.hasSyncedLyrics) return a.hasSyncedLyrics ? -1 : 1;
+      return 0;
+    });
+    return out.slice(0, 20);
+  }
+
+  /** Fetch a single LRC by LRClib id. Returns null if no synced lyrics. */
+  async fetchById(id: number): Promise<string | null> {
+    const source = this.sources[0];
+    try {
+      const res = await fetch(`${source.url}${source.downloadEndpoint}/${id}`);
+      if (!res.ok) return null;
+      const data = (await res.json()) as {syncedLyrics?: string | null};
+      return data.syncedLyrics ?? null;
+    } catch {
+      return null;
+    }
   }
 
   private async trySource(source: LRCSource, title: string, artist: string): Promise<string | null> {

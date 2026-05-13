@@ -543,6 +543,55 @@ export class UserSession {
     this.positionTracker.reset();
   }
 
+  /**
+   * Force an immediate ACR re-fingerprint. Used by the webview's
+   * "Resync" button when the user spots that lyrics have drifted but
+   * we haven't auto-corrected (drift below the recalibrate threshold,
+   * stale buffer, etc.). Drops through the normal handleRecognitionResult
+   * path so it always behaves like any other detection — recalibrates
+   * position if a song is matched, kicks the fresh window so subsequent
+   * samples come fast.
+   */
+  async requestResync(): Promise<{recognized: boolean; result: unknown}> {
+    this.logger.info({}, 'Manual resync requested');
+    const result = await this.recognitionManager.performRecognition();
+    return {recognized: !!result && !result.error, result};
+  }
+
+  /**
+   * Switch the active LRC to a specific LRClib entry. Used when the
+   * user opens "Wrong version?" in the webview and picks a different
+   * cut from the alternatives list.
+   *
+   * On success: the chunker is rebuilt against the new LRC, the song
+   * is flagged hasLyrics=true, and the next display tick picks up the
+   * new chunks. Position tracker is untouched — the user picked this
+   * LRC for the current playback, so the clock keeps running and the
+   * new chunks line up against it.
+   */
+  async switchLRCVersion(lrcId: number): Promise<boolean> {
+    if (!this.currentSong) {
+      this.logger.warn({}, 'switchLRCVersion called without a current song');
+      return false;
+    }
+    const lines = await this.lyricsManager.switchToLRCById(lrcId);
+    if (!lines || lines.length === 0) {
+      this.logger.warn({lrcId}, 'switchLRCVersion: LRC not available or has no synced lyrics');
+      return false;
+    }
+    this.currentSong.lrcData = lines;
+    this.currentSong.hasLyrics = true;
+    this.appState = AppState.SONG_DETECTED_WITH_LYRICS;
+    this.logger.info({lrcId, lyricsCount: lines.length}, 'Switched LRC version');
+    return true;
+  }
+
+  /** Surfaces LRClib alternatives for the current song to the webview. */
+  async getAlternativeVersions() {
+    if (!this.currentSong) return [];
+    return this.lrcService.searchAlternatives(this.currentSong.title, this.currentSong.artist);
+  }
+
   getStats(): any {
     const song = this.currentSong;
     return {
@@ -556,6 +605,7 @@ export class UserSession {
         duration: song.duration,
         hasLyrics: song.hasLyrics,
         artworkUrl: this.artworkService.peek(song.title, song.artist) ?? null,
+        lrcId: this.lyricsManager.getCurrentLRCId(),
       } : null,
       history: this.historyManager.getStatistics(),
       cacheSize: this.lyricsManager.getCacheSize()
