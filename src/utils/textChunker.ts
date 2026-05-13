@@ -54,19 +54,21 @@ export interface ChunkerOptions {
    */
   maxGapSeconds?: number;
   /**
-   * Cap on chunk total duration. Combining 3 short LRC lines that
-   * together span 10 s would dilute the karaoke feel; we'd rather
-   * break them into two chunks of 5 s each.
+   * Cap on chunk's VOCAL time-span (first LRC timestamp → last LRC
+   * timestamp). Measures how long the chunk is actually being sung,
+   * not how long it sits on the HUD. A chunk whose last word is at
+   * 1:41 followed by a 6 s instrumental until the next phrase has a
+   * vocal span of 0 s past whatever combined lines preceded it —
+   * the trailing silence is the chunk lingering on screen, not the
+   * user being asked to read too much at once.
    */
   maxChunkDurationSeconds?: number;
   /** 'word' (default) | 'character' | 'strict-word'. */
   breakMode?: "character" | "word" | "strict-word";
 }
 
-interface WrappedLine {
+interface WrappedItem {
   lrc: LRCLine;
-  /** HUD-wrapped lines for this single LRC entry. Always ≥ 1. */
-  lines: string[];
   /** This line's effective end time (next line's start or +3 s for last). */
   endTime: number;
 }
@@ -83,42 +85,66 @@ export function chunkLyrics(lrcData: LRCLine[], options: ChunkerOptions = {}): L
   const measurer = new TextMeasurer(profile);
   const wrapper = new TextWrapper(measurer, {breakMode, hyphenChar: "-"});
 
-  // Pre-wrap each LRC line so combining decisions know exact HUD-line cost.
-  const wrapped: WrappedLine[] = lrcData
-    .filter((line) => !!line.text)
-    .map((line) => {
-      const w = wrapper.wrap(line.text, {
-        maxWidthPx,
-        maxLines: Infinity,
-        maxBytes: Infinity,
-      });
-      const ls = w.lines.length > 0 ? w.lines : [line.text];
-      return {lrc: line, lines: ls, endTime: line.endTime ?? line.timestamp + 3};
+  /**
+   * Join a list of LRC text snippets with single spaces, then wrap the
+   * combined string into HUD-fitting lines. Re-wrapping the joined
+   * text (vs concatenating individually-wrapped pieces) is the key:
+   * "Now it's time to leave the capsule" + "if you dare" wraps to
+   * ONE 47-char line, not two short lines. The user gets a single
+   * coherent phrase as one chunk.
+   */
+  const wrapJoined = (texts: string[]): string[] => {
+    const joined = texts.join(" ").replace(/\s+/g, " ").trim();
+    if (!joined) return [];
+    const result = wrapper.wrap(joined, {
+      maxWidthPx,
+      maxLines: Infinity,
+      maxBytes: Infinity,
     });
+    return result.lines.length > 0 ? result.lines : [joined];
+  };
+
+  const items: WrappedItem[] = lrcData
+    .filter((line) => !!line.text)
+    .map((line) => ({
+      lrc: line,
+      endTime: line.endTime ?? line.timestamp + 3,
+    }));
 
   const chunks: LyricsChunk[] = [];
   let i = 0;
-  while (i < wrapped.length) {
-    const start = wrapped[i];
+  while (i < items.length) {
+    const start = items[i];
     const startTime = start.lrc.timestamp;
-    let lines = [...start.lines];
+    let texts = [start.lrc.text];
+    let lines = wrapJoined(texts);
     let endTime = start.endTime;
     let combinedLrcCount = 1;
     let j = i + 1;
 
-    // Greedily absorb the next LRC line if it still satisfies every rule.
-    while (j < wrapped.length) {
-      const next = wrapped[j];
+    // Greedy absorption: at each step compute what the chunk WOULD
+    // look like if we added the next LRC line. If the resulting
+    // wrapped block still fits and stays coherent, keep it.
+    while (j < items.length) {
+      const next = items[j];
       const gap = next.lrc.timestamp - endTime;
-      const combinedDuration = (next.endTime - startTime);
-      const combinedLineCount = lines.length + next.lines.length;
-
       if (gap > maxGap) break;
-      if (combinedLineCount > maxLines) break;
       if (combinedLrcCount + 1 > maxLrcLines) break;
-      if (combinedDuration > maxChunkDuration) break;
 
-      lines.push(...next.lines);
+      const candidateTexts = [...texts, next.lrc.text];
+      const candidateLines = wrapJoined(candidateTexts);
+      if (candidateLines.length > maxLines) break;
+
+      // Measure VOCAL time-span: first LRC timestamp → next LRC line's
+      // timestamp (i.e. when the last word of the prospective chunk
+      // starts being sung). Excludes any trailing instrumental gap
+      // before the next phrase — that silence is just the chunk
+      // lingering on screen, not active vocals.
+      const candidateVocalSpan = next.lrc.timestamp - startTime;
+      if (candidateVocalSpan > maxChunkDuration) break;
+
+      texts = candidateTexts;
+      lines = candidateLines;
       endTime = next.endTime;
       combinedLrcCount++;
       j++;
