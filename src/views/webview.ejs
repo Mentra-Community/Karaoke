@@ -51,6 +51,18 @@
             </div>
         </section>
 
+        <section class="display-log">
+            <details>
+                <summary>
+                    <span class="display-log-title">Display log</span>
+                    <span class="display-log-sub" id="display-log-count">0 frames</span>
+                </summary>
+                <ol class="display-log-list" id="display-log-list">
+                    <li class="display-log-empty">Nothing on screen yet.</li>
+                </ol>
+            </details>
+        </section>
+
         <section class="history">
             <h3>Recently identified</h3>
             <ol class="history-list" id="history-list">
@@ -83,6 +95,8 @@
         const lyricsCurrent = $("lyrics-current");
         const lyricsNext = $("lyrics-next");
         const lyricsProgressBar = $("lyrics-progress-bar");
+        const displayLogList = $("display-log-list");
+        const displayLogCount = $("display-log-count");
         const historyList = $("history-list");
 
         const STATE_LABELS = {
@@ -159,6 +173,52 @@
             lyricsProgressBar.style.transform = `scaleX(${through})`;
         }
 
+        function fmtClock(ts) {
+            const d = new Date(ts);
+            const hh = d.getHours().toString().padStart(2, "0");
+            const mm = d.getMinutes().toString().padStart(2, "0");
+            const ss = d.getSeconds().toString().padStart(2, "0");
+            const ms = d.getMilliseconds().toString().padStart(3, "0");
+            return `${hh}:${mm}:${ss}.${ms}`;
+        }
+
+        function fmtDuration(ms) {
+            if (typeof ms !== "number" || ms < 0) return "";
+            if (ms < 1000) return ms + "ms";
+            const s = ms / 1000;
+            return s.toFixed(s >= 10 ? 1 : 2) + "s";
+        }
+
+        function applyDisplayLog(frames) {
+            if (!frames || frames.length === 0) {
+                displayLogList.innerHTML = '<li class="display-log-empty">Nothing on screen yet.</li>';
+                displayLogCount.textContent = "0 frames";
+                return;
+            }
+            displayLogCount.textContent = frames.length + " frame" + (frames.length === 1 ? "" : "s");
+            // Newest first
+            const rows = frames.slice().reverse().map((f) => {
+                const meta = [
+                    `<span class="dl-time">${fmtClock(f.at)}</span>`,
+                    `<span class="dl-dur">${fmtDuration(f.durationMs)}</span>`,
+                    `<span class="dl-state" data-state="${f.appState}">${f.appState}</span>`,
+                    f.song ? `<span class="dl-position">${fmtTime(f.position)}/${fmtTime(f.song.duration)}</span>` : "",
+                ].filter(Boolean).join("");
+
+                const body = (f.lines && f.lines.length > 0 ? f.lines : [f.text || ""])
+                    .map((line) => `<span class="dl-line">${escapeHtml(line) || "&nbsp;"}</span>`)
+                    .join("");
+
+                return `
+                    <li class="display-log-row" data-state="${f.appState}">
+                        <div class="dl-meta">${meta}</div>
+                        <pre class="dl-body">${body}</pre>
+                    </li>
+                `;
+            }).join("");
+            displayLogList.innerHTML = rows;
+        }
+
         function applyHistory(items) {
             if (!items || items.length === 0) {
                 historyList.innerHTML = '<li class="history-empty">Nothing yet.</li>';
@@ -196,6 +256,7 @@
                 applyState(data.connected ? data.state : "DISCONNECTED");
                 applySong(data.currentSong);
                 applyLyrics(data.lyrics);
+                applyDisplayLog(data.displayHistory);
                 applyHistory(data.history);
             } catch (_err) {
                 applyState("DISCONNECTED");

@@ -512,6 +512,15 @@ export class UserSession {
   }
 
   /**
+   * Audit log of frames that have been shown on the glasses HUD.
+   * Latest at the end. Used by the webview to let us debug timing and
+   * formatter behavior after the fact.
+   */
+  getDisplayHistory(limit?: number) {
+    return this.displayManager.getDisplayHistory(limit);
+  }
+
+  /**
    * Current playback position + currently-active and upcoming lyrics
    * chunks. Used by the webview to mirror what the glasses HUD is
    * showing.

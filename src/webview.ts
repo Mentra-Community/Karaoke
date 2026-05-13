@@ -48,6 +48,7 @@ export function setupWebviewRoutes(app: KaraokeApp): void {
         currentSong: null,
         lyrics: null,
         history: [],
+        displayHistory: [],
       })
     }
 
@@ -64,6 +65,7 @@ export function setupWebviewRoutes(app: KaraokeApp): void {
         artist: h.artist,
         identifiedAt: h.identifiedAt,
       })),
+      displayHistory: session.getDisplayHistory(40),
     })
   })
 }
