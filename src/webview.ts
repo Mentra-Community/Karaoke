@@ -4,13 +4,15 @@
  * Mounts the phone-side webview for the Karaoke miniapp on the new
  * Hono-based AppServer (@mentra/sdk@^3.0.0-alpha).
  *
- * Two endpoints:
- *   GET /webview      Renders the EJS shell. Live state comes from
- *                     polling /api/stats every second.
- *   GET /api/stats    JSON snapshot of the authenticated user's
- *                     current song, app state, and recent history.
+ * Endpoints:
+ *   GET  /webview          EJS shell. Polls /api/stats every second.
+ *   GET  /api/stats        Live now-playing state for the Now Playing tab.
+ *   GET  /api/history      Persistent detection log for the History tab.
+ *                          Query: ?limit=200&favoritesOnly=true
+ *   POST /api/favorite     Toggle favorite for a {title, artist} pair.
+ *   GET  /api/display-log  Plain-text HUD frame audit (debug only).
  *
- * Both routes read `authUserId` from the Hono context variables that
+ * All routes read `authUserId` from the Hono context variables that
  * the SDK auth middleware populates. We resolve the active
  * UserSession by that userId so the webview never trusts query
  * strings or headers.
@@ -65,6 +67,51 @@ export function setupWebviewRoutes(app: KaraokeApp): void {
         identifiedAt: h.identifiedAt,
       })),
     })
+  })
+
+  // Persistent history feed for the History tab. Returns the same
+  // detection events that get written to SimpleStorage by
+  // HistoryManager — they outlast the current session and follow the
+  // user across reconnects.
+  app.get("/api/history", (c: MentraAuthHonoContext) => {
+    const userId = c.get("authUserId")
+    if (!userId) return c.json({error: "Not authenticated"}, 401)
+
+    const session = app.getSessionByUserId(userId)
+    if (!session) return c.json({events: [], stats: null})
+
+    const url = new URL(c.req.url)
+    const limit = Math.min(500, Math.max(1, parseInt(url.searchParams.get("limit") ?? "200", 10)))
+    const favoritesOnly = url.searchParams.get("favoritesOnly") === "true"
+
+    return c.json({
+      events: session.historyManager.getEvents({limit, favoritesOnly}),
+      stats: session.historyManager.getStatistics(),
+    })
+  })
+
+  // Toggle favorite for a song. Body: {title, artist}.
+  app.post("/api/favorite", async (c: MentraAuthHonoContext) => {
+    const userId = c.get("authUserId")
+    if (!userId) return c.json({error: "Not authenticated"}, 401)
+
+    const session = app.getSessionByUserId(userId)
+    if (!session) return c.json({error: "No active session"}, 404)
+
+    let body: {title?: string; artist?: string}
+    try {
+      body = await c.req.json()
+    } catch {
+      return c.json({error: "Invalid JSON body"}, 400)
+    }
+    const title = (body.title ?? "").trim()
+    const artist = (body.artist ?? "").trim()
+    if (!title || !artist) {
+      return c.json({error: "title and artist are required"}, 400)
+    }
+
+    const favorite = session.historyManager.toggleFavorite(title, artist)
+    return c.json({title, artist, favorite})
   })
 
   // Audit log of every frame pushed to the glasses HUD. Plain text,

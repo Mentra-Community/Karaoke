@@ -19,53 +19,77 @@
             <p class="tagline">Sing along on your glasses.</p>
         </header>
 
-        <section class="now-playing" id="now-playing">
-            <div class="np-empty" id="np-empty">
-                <svg class="np-empty-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                    <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z" />
-                </svg>
-                <p class="np-title">Listening for a song</p>
-                <p class="np-sub">Play any track nearby and we'll catch the lyrics.</p>
-            </div>
+        <nav class="tabs" role="tablist">
+            <button class="tab is-active" data-tab="now-playing" role="tab" aria-selected="true">Now Playing</button>
+            <button class="tab" data-tab="history" role="tab" aria-selected="false">
+                History
+                <span class="tab-count" id="tab-count-history">0</span>
+            </button>
+        </nav>
 
-            <div class="np-active" id="np-active" hidden>
-                <img class="np-art" id="np-art" alt="" hidden>
-                <div class="np-art-placeholder" id="np-art-placeholder">
-                    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <!-- ─── Now Playing tab ─────────────────────────────────────── -->
+        <section class="tab-panel is-active" id="panel-now-playing" role="tabpanel">
+            <section class="now-playing" id="now-playing">
+                <div class="np-empty" id="np-empty">
+                    <svg class="np-empty-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                         <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z" />
                     </svg>
+                    <p class="np-title">Listening for a song</p>
+                    <p class="np-sub">Play any track nearby and we'll catch the lyrics.</p>
                 </div>
-                <div class="np-text">
-                    <p class="np-eyebrow">Now Playing</p>
-                    <h2 class="np-title" id="song-title">—</h2>
-                    <p class="np-artist" id="song-artist">—</p>
-                    <div class="np-meta">
-                        <span id="song-position">0:00</span>
-                        <span class="dot-sep">•</span>
-                        <span id="song-duration">0:00</span>
-                        <span class="dot-sep">•</span>
-                        <span id="song-lyrics-flag">No lyrics</span>
+
+                <div class="np-active" id="np-active" hidden>
+                    <img class="np-art" id="np-art" alt="" hidden>
+                    <div class="np-art-placeholder" id="np-art-placeholder">
+                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z" />
+                        </svg>
                     </div>
+                    <div class="np-text">
+                        <p class="np-eyebrow">Now Playing</p>
+                        <h2 class="np-title" id="song-title">—</h2>
+                        <p class="np-artist" id="song-artist">—</p>
+                        <div class="np-meta">
+                            <span id="song-position">0:00</span>
+                            <span class="dot-sep">•</span>
+                            <span id="song-duration">0:00</span>
+                            <span class="dot-sep">•</span>
+                            <span id="song-lyrics-flag">No lyrics</span>
+                        </div>
+                    </div>
+                    <button class="fav-btn fav-btn-np" id="song-fav-btn" aria-label="Favorite" hidden>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                        </svg>
+                    </button>
                 </div>
-            </div>
+            </section>
+
+            <section class="lyrics" id="lyrics-section" hidden>
+                <p class="np-eyebrow">Lyrics</p>
+                <div class="lyrics-card">
+                    <div class="lyrics-current" id="lyrics-current"></div>
+                    <div class="lyrics-progress">
+                        <div class="lyrics-progress-bar" id="lyrics-progress-bar"></div>
+                    </div>
+                    <div class="lyrics-next" id="lyrics-next"></div>
+                </div>
+            </section>
         </section>
 
-        <section class="lyrics" id="lyrics-section" hidden>
-            <p class="np-eyebrow">Lyrics</p>
-            <div class="lyrics-card">
-                <div class="lyrics-current" id="lyrics-current"></div>
-                <div class="lyrics-progress">
-                    <div class="lyrics-progress-bar" id="lyrics-progress-bar"></div>
+        <!-- ─── History tab ─────────────────────────────────────────── -->
+        <section class="tab-panel" id="panel-history" role="tabpanel" hidden>
+            <div class="history-toolbar">
+                <div class="filter-chips" role="tablist" aria-label="Filter">
+                    <button class="chip is-active" data-filter="all" role="tab" aria-selected="true">All</button>
+                    <button class="chip" data-filter="favorites" role="tab" aria-selected="false">Favorites</button>
                 </div>
-                <div class="lyrics-next" id="lyrics-next"></div>
+                <div class="history-stats" id="history-stats">—</div>
             </div>
-        </section>
 
-        <section class="history">
-            <h3>Recently identified</h3>
-            <ol class="history-list" id="history-list">
-                <li class="history-empty">Nothing yet.</li>
-            </ol>
+            <div class="history-feed" id="history-feed">
+                <p class="history-empty">Nothing identified yet. Play something nearby.</p>
+            </div>
         </section>
 
         <footer class="footer">
@@ -80,6 +104,9 @@
     <script>
     (function () {
         const $ = (id) => document.getElementById(id);
+        const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+        // ─── Now Playing refs ────────────────────────────────────────
         const stateLabel = $("state-label");
         const stateDot = $("state-dot");
         const npEmpty = $("np-empty");
@@ -89,13 +116,18 @@
         const songPosition = $("song-position");
         const songDuration = $("song-duration");
         const songLyricsFlag = $("song-lyrics-flag");
+        const songFavBtn = $("song-fav-btn");
         const npArt = $("np-art");
         const npArtPlaceholder = $("np-art-placeholder");
         const lyricsSection = $("lyrics-section");
         const lyricsCurrent = $("lyrics-current");
         const lyricsNext = $("lyrics-next");
         const lyricsProgressBar = $("lyrics-progress-bar");
-        const historyList = $("history-list");
+
+        // ─── History refs ────────────────────────────────────────────
+        const historyFeed = $("history-feed");
+        const historyStats = $("history-stats");
+        const tabCountHistory = $("tab-count-history");
 
         const STATE_LABELS = {
             LISTENING: "Listening",
@@ -104,6 +136,11 @@
             SONG_DETECTED_NO_LYRICS: "Song detected",
             DISCONNECTED: "Not connected",
         };
+
+        let currentSongRef = null;       // {title, artist} for the fav button
+        let currentSongIsFavorite = false;
+        let activeFilter = "all";
+        let activeTab = "now-playing";
 
         function fmtTime(seconds) {
             if (typeof seconds !== "number" || !isFinite(seconds) || seconds < 0) return "0:00";
@@ -119,94 +156,24 @@
             const m = Math.floor(s / 60);
             if (m < 60) return m + "m ago";
             const h = Math.floor(m / 60);
-            return h + "h ago";
+            if (h < 24) return h + "h ago";
+            const d = Math.floor(h / 24);
+            return d + "d ago";
         }
 
-        function applyState(state) {
-            stateLabel.textContent = STATE_LABELS[state] ?? state;
-            stateDot.dataset.state = state;
-        }
-
-        function applySong(song) {
-            if (!song) {
-                npEmpty.hidden = false;
-                npActive.hidden = true;
-                return;
-            }
-            npEmpty.hidden = true;
-            npActive.hidden = false;
-            songTitle.textContent = song.title || "Unknown";
-            songArtist.textContent = song.artist || "Unknown artist";
-            songPosition.textContent = fmtTime(song.position);
-            songDuration.textContent = fmtTime(song.duration);
-            songLyricsFlag.textContent = song.hasLyrics ? "Synced lyrics" : "No lyrics";
-            songLyricsFlag.dataset.lyrics = song.hasLyrics ? "yes" : "no";
-
-            // Album artwork — hide placeholder if the image loads, swap
-            // back if it fails or no URL is set.
-            if (song.artworkUrl) {
-                if (npArt.src !== song.artworkUrl) {
-                    npArt.onerror = () => {
-                        npArt.hidden = true;
-                        npArtPlaceholder.hidden = false;
-                    };
-                    npArt.onload = () => {
-                        npArt.hidden = false;
-                        npArtPlaceholder.hidden = true;
-                    };
-                    npArt.src = song.artworkUrl;
-                }
-            } else {
-                npArt.hidden = true;
-                npArt.removeAttribute("src");
-                npArtPlaceholder.hidden = false;
-            }
-        }
-
-        function applyLyrics(lyrics) {
-            // lyrics: { position, current: {lines, startTime, endTime} | null, next: {...} | null } | null
-            if (!lyrics || !lyrics.current) {
-                lyricsSection.hidden = true;
-                return;
-            }
-            lyricsSection.hidden = false;
-
-            const cur = lyrics.current;
-            lyricsCurrent.innerHTML = cur.lines
-                .map((line) => `<p class="lyrics-line">${escapeHtml(line) || "&nbsp;"}</p>`)
-                .join("");
-
-            if (lyrics.next && lyrics.next.lines.length > 0) {
-                lyricsNext.innerHTML = lyrics.next.lines
-                    .slice(0, 2)
-                    .map((line) => `<p class="lyrics-line-next">${escapeHtml(line) || "&nbsp;"}</p>`)
-                    .join("");
-            } else {
-                lyricsNext.innerHTML = "";
-            }
-
-            // Progress through the current chunk
-            const span = Math.max(0.01, cur.endTime - cur.startTime);
-            const through = Math.max(0, Math.min(1, (lyrics.position - cur.startTime) / span));
-            lyricsProgressBar.style.transform = `scaleX(${through})`;
-        }
-
-        function applyHistory(items) {
-            if (!items || items.length === 0) {
-                historyList.innerHTML = '<li class="history-empty">Nothing yet.</li>';
-                return;
-            }
-            historyList.innerHTML = items
-                .map((h) => `
-                    <li class="history-item">
-                        <div class="history-text">
-                            <span class="history-title">${escapeHtml(h.title)}</span>
-                            <span class="history-artist">${escapeHtml(h.artist)}</span>
-                        </div>
-                        <span class="history-time">${fmtRelative(h.identifiedAt)}</span>
-                    </li>
-                `)
-                .join("");
+        function dayBucket(ts) {
+            const d = new Date(ts);
+            const now = new Date();
+            const sameDay = (a, b) =>
+                a.getFullYear() === b.getFullYear() &&
+                a.getMonth() === b.getMonth() &&
+                a.getDate() === b.getDate();
+            const yesterday = new Date(now);
+            yesterday.setDate(now.getDate() - 1);
+            if (sameDay(d, now)) return "Today";
+            if (sameDay(d, yesterday)) return "Yesterday";
+            // e.g. "Mon, May 10"
+            return d.toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric"});
         }
 
         function escapeHtml(s) {
@@ -217,6 +184,221 @@
                 .replace(/"/g, "&quot;");
         }
 
+        // ─── State / now playing rendering ──────────────────────────
+        function applyState(state) {
+            stateLabel.textContent = STATE_LABELS[state] ?? state;
+            stateDot.dataset.state = state;
+        }
+
+        function applySong(song) {
+            if (!song) {
+                npEmpty.hidden = false;
+                npActive.hidden = true;
+                currentSongRef = null;
+                songFavBtn.hidden = true;
+                return;
+            }
+            npEmpty.hidden = true;
+            npActive.hidden = false;
+            songTitle.textContent = song.title || "Unknown";
+            songArtist.textContent = song.artist || "Unknown artist";
+            songPosition.textContent = fmtTime(song.position);
+            songDuration.textContent = fmtTime(song.duration);
+            songLyricsFlag.textContent = song.hasLyrics ? "Synced lyrics" : "No lyrics";
+            songLyricsFlag.dataset.lyrics = song.hasLyrics ? "yes" : "no";
+            currentSongRef = {title: song.title, artist: song.artist};
+            songFavBtn.hidden = false;
+
+            // Album artwork
+            if (song.artworkUrl) {
+                if (npArt.src !== song.artworkUrl) {
+                    npArt.onerror = () => { npArt.hidden = true; npArtPlaceholder.hidden = false; };
+                    npArt.onload = () => { npArt.hidden = false; npArtPlaceholder.hidden = true; };
+                    npArt.src = song.artworkUrl;
+                }
+            } else {
+                npArt.hidden = true;
+                npArt.removeAttribute("src");
+                npArtPlaceholder.hidden = false;
+            }
+        }
+
+        function applyLyrics(lyrics) {
+            if (!lyrics || !lyrics.current) {
+                lyricsSection.hidden = true;
+                return;
+            }
+            lyricsSection.hidden = false;
+            const cur = lyrics.current;
+            lyricsCurrent.innerHTML = cur.lines
+                .map((line) => `<p class="lyrics-line">${escapeHtml(line) || "&nbsp;"}</p>`)
+                .join("");
+            if (lyrics.next && lyrics.next.lines.length > 0) {
+                lyricsNext.innerHTML = lyrics.next.lines
+                    .slice(0, 2)
+                    .map((line) => `<p class="lyrics-line-next">${escapeHtml(line) || "&nbsp;"}</p>`)
+                    .join("");
+            } else {
+                lyricsNext.innerHTML = "";
+            }
+            const span = Math.max(0.01, cur.endTime - cur.startTime);
+            const through = Math.max(0, Math.min(1, (lyrics.position - cur.startTime) / span));
+            lyricsProgressBar.style.transform = `scaleX(${through})`;
+        }
+
+        function setNowPlayingFav(isFav) {
+            currentSongIsFavorite = isFav;
+            songFavBtn.dataset.fav = isFav ? "yes" : "no";
+            songFavBtn.setAttribute("aria-pressed", isFav ? "true" : "false");
+        }
+
+        // ─── History rendering ───────────────────────────────────────
+        function renderHistory(events) {
+            tabCountHistory.textContent = events.length;
+            if (!events || events.length === 0) {
+                historyFeed.innerHTML = '<p class="history-empty">' +
+                    (activeFilter === "favorites"
+                        ? "No favorites yet. Tap the heart on a song to save it."
+                        : "Nothing identified yet. Play something nearby.") +
+                    '</p>';
+                return;
+            }
+
+            // Group by day bucket, preserving newest-first order within
+            // each bucket. Server already gives us newest-first.
+            const buckets = [];
+            let currentBucket = null;
+            for (const e of events) {
+                const label = dayBucket(e.identifiedAt);
+                if (!currentBucket || currentBucket.label !== label) {
+                    currentBucket = {label, items: []};
+                    buckets.push(currentBucket);
+                }
+                currentBucket.items.push(e);
+            }
+
+            const html = buckets.map((bucket) => `
+                <div class="day-group">
+                    <h3 class="day-label">${escapeHtml(bucket.label)}</h3>
+                    <ul class="event-list">
+                        ${bucket.items.map((e) => `
+                            <li class="event-row" data-fav="${e.favorite ? "yes" : "no"}">
+                                ${e.artworkUrl
+                                    ? `<img class="event-art" src="${escapeHtml(e.artworkUrl)}" alt="">`
+                                    : `<div class="event-art event-art-fallback">
+                                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                            <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z" />
+                                        </svg>
+                                       </div>`}
+                                <div class="event-text">
+                                    <span class="event-title">${escapeHtml(e.title)}</span>
+                                    <span class="event-artist">${escapeHtml(e.artist)}</span>
+                                </div>
+                                <div class="event-side">
+                                    <span class="event-time" title="${new Date(e.identifiedAt).toLocaleString()}">
+                                        ${new Date(e.identifiedAt).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}
+                                    </span>
+                                    <button class="fav-btn"
+                                            data-title="${escapeHtml(e.title)}"
+                                            data-artist="${escapeHtml(e.artist)}"
+                                            data-fav="${e.favorite ? "yes" : "no"}"
+                                            aria-label="${e.favorite ? "Unfavorite" : "Favorite"}"
+                                            aria-pressed="${e.favorite ? "true" : "false"}">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </li>
+                        `).join("")}
+                    </ul>
+                </div>
+            `).join("");
+            historyFeed.innerHTML = html;
+        }
+
+        async function refreshHistory() {
+            try {
+                const params = new URLSearchParams({limit: "200"});
+                if (activeFilter === "favorites") params.set("favoritesOnly", "true");
+                const r = await fetch("/api/history?" + params.toString(), {credentials: "include"});
+                if (!r.ok) return;
+                const data = await r.json();
+                renderHistory(data.events || []);
+                if (data.stats) {
+                    const {totalSongs, uniqueSongs, favoriteCount} = data.stats;
+                    historyStats.textContent =
+                        `${totalSongs} plays · ${uniqueSongs} unique · ${favoriteCount} favorited`;
+                }
+                // Sync the Now Playing heart icon with the favorite state
+                // for the song that's currently on the screen.
+                if (currentSongRef) {
+                    const match = (data.events || []).find((e) =>
+                        e.title === currentSongRef.title && e.artist === currentSongRef.artist);
+                    setNowPlayingFav(!!match?.favorite);
+                }
+            } catch (_) {
+                // soft-fail; next tick will retry
+            }
+        }
+
+        async function toggleFavorite(title, artist) {
+            try {
+                const r = await fetch("/api/favorite", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    credentials: "include",
+                    body: JSON.stringify({title, artist}),
+                });
+                if (!r.ok) return;
+                await refreshHistory();
+            } catch (_) {}
+        }
+
+        // ─── Tab + filter wiring ─────────────────────────────────────
+        function setTab(name) {
+            activeTab = name;
+            $$(".tab").forEach((b) => {
+                const on = b.dataset.tab === name;
+                b.classList.toggle("is-active", on);
+                b.setAttribute("aria-selected", on ? "true" : "false");
+            });
+            $$(".tab-panel").forEach((p) => {
+                const on = p.id === "panel-" + name;
+                p.classList.toggle("is-active", on);
+                p.hidden = !on;
+            });
+            if (name === "history") refreshHistory();
+        }
+
+        function setFilter(name) {
+            activeFilter = name;
+            $$(".chip").forEach((c) => {
+                const on = c.dataset.filter === name;
+                c.classList.toggle("is-active", on);
+                c.setAttribute("aria-selected", on ? "true" : "false");
+            });
+            refreshHistory();
+        }
+
+        // Event delegation for tab clicks
+        $$(".tab").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+        $$(".chip").forEach((c) => c.addEventListener("click", () => setFilter(c.dataset.filter)));
+
+        // Favorite toggles in the history list (delegation)
+        historyFeed.addEventListener("click", (ev) => {
+            const btn = ev.target.closest(".fav-btn");
+            if (!btn) return;
+            const {title, artist} = btn.dataset;
+            if (title && artist) toggleFavorite(title, artist);
+        });
+
+        // Now Playing heart button
+        songFavBtn.addEventListener("click", () => {
+            if (currentSongRef) toggleFavorite(currentSongRef.title, currentSongRef.artist);
+        });
+
+        // ─── Polling ─────────────────────────────────────────────────
         async function tick() {
             try {
                 const r = await fetch("/api/stats", {credentials: "include"});
@@ -228,7 +410,6 @@
                 applyState(data.connected ? data.state : "DISCONNECTED");
                 applySong(data.currentSong);
                 applyLyrics(data.lyrics);
-                applyHistory(data.history);
             } catch (_err) {
                 applyState("DISCONNECTED");
             }
@@ -236,6 +417,23 @@
 
         tick();
         setInterval(tick, 1000);
+
+        // History refresh: every 10s on Now Playing tab so the count
+        // chip stays warm; on every visible interaction when History
+        // tab is active.
+        refreshHistory();
+        setInterval(() => {
+            if (activeTab === "history") refreshHistory();
+            else {
+                // background light refresh: keep the count chip current
+                fetch("/api/history?limit=1", {credentials: "include"})
+                    .then((r) => r.ok ? r.json() : null)
+                    .then((d) => {
+                        if (d?.stats) tabCountHistory.textContent = d.stats.totalSongs;
+                    })
+                    .catch(() => {});
+            }
+        }, 10000);
     })();
     </script>
 </body>

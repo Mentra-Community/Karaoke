@@ -68,6 +68,14 @@ export class UserSession {
     this.displayManager = new DisplayManager(session);
     this.historyManager = new HistoryManager();
 
+    // Hydrate persistent history (events + favorites) from cloud
+    // storage. Fire-and-forget — calls during the warm-up window just
+    // return what's in memory until this resolves.
+    const storage = session.simpleStorage ?? null;
+    this.historyManager.init(storage, this.logger).catch((err) => {
+      this.logger.warn({err: err?.message}, 'HistoryManager hydration failed');
+    });
+
     this.setupAudioStream();
   }
 
@@ -222,8 +230,15 @@ export class UserSession {
 
     // Fire-and-forget album art lookup. The webview reads via
     // ArtworkService.peek() in getStats(), so it'll be visible on the
-    // next poll tick once iTunes responds (typically <500ms).
-    this.artworkService.fetchArtwork(newSong.title, newSong.artist).catch(() => {});
+    // next poll tick once iTunes responds (typically <500ms). Also
+    // backfill the just-added history event with the URL so older
+    // events keep their cover art across reloads.
+    this.artworkService
+      .fetchArtwork(newSong.title, newSong.artist)
+      .then((url) => {
+        if (url) this.historyManager.updateArtworkForLatest(newSong.title, newSong.artist, url);
+      })
+      .catch(() => {});
 
     if (result.offsetSeconds !== undefined) {
       this.positionTracker.startSong(
