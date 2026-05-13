@@ -94,12 +94,23 @@ export class RecognitionManager {
       // Silence gate. When no song is playing and the mic feed is
       // basically dead air, skip the API call entirely — saves ACR
       // credits and stops us from "detecting" random remixes off
-      // background noise. We still advance lastRecognitionTime so the
-      // backoff clock keeps ticking.
+      // background noise.
+      //
+      // BUT — the gate is only applied in steady-state LISTENING.
+      // During the initial probe budget (first N probes after waking)
+      // and during alert mode (60s after a song ends) we explicitly
+      // expect a song to be starting; gating those probes makes the
+      // next song take 30-60+ seconds to detect because RMS for the
+      // intro/buildup of a track can be well under 800 (~the
+      // background-noise threshold). We'd rather burn 6-12 extra
+      // ACR calls per minute than miss the next song.
       const isListening =
         this.state === RecognitionState.LISTENING ||
         this.state === RecognitionState.SONG_ENDING;
-      if (isListening && rms < this.config.SILENCE_RMS_THRESHOLD) {
+      const inExpectedSongWindow =
+        this.probesSinceWake < this.config.RECOGNITION_INITIAL_PROBE_COUNT ||
+        this.isInAlertMode();
+      if (isListening && !inExpectedSongWindow && rms < this.config.SILENCE_RMS_THRESHOLD) {
         this.logger.debug(
           {state: RecognitionState[this.state], rms: Math.round(rms), threshold: this.config.SILENCE_RMS_THRESHOLD, interval},
           'Silence gate: skipping ACR call (no audio energy)',

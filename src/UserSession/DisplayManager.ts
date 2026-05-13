@@ -95,14 +95,29 @@ export class DisplayManager {
     return chunk.lines.join('\n');
   }
 
+  /** Re-push the current frame on the next updateDisplay call even if
+   *  the text hasn't changed. Used at state-transition boundaries
+   *  (song end, song detect) and by the heartbeat to recover from
+   *  dropped BLE frames. */
+  invalidate(): void {
+    this.currentDisplay = '___invalidated___';
+  }
+
+  private readonly HEARTBEAT_MS = 10000;
+
   private updateDisplay(text: string): void {
-    if (text !== this.currentDisplay) {
+    const now = Date.now();
+    const changed = text !== this.currentDisplay;
+    const stale = now - this.lastUpdateTime >= this.HEARTBEAT_MS;
+    if (changed || stale) {
       this.logger.debug({
         newText: text,
-        previousText: this.currentDisplay
+        previousText: this.currentDisplay,
+        changed,
+        stale,
       }, 'Updating display text');
       this.currentDisplay = text;
-      this.lastUpdateTime = Date.now();
+      this.lastUpdateTime = now;
       this.session.layouts.showTextWall(text);
     }
   }

@@ -444,7 +444,13 @@ export class UserSession {
     // calls than miss the next song's first 30 seconds.
     this.recognitionManager.enterAlertMode();
 
-    // Don't update display here - let updateDisplay handle it
+    // Force the HUD to re-render. The display manager dedupes on text
+    // equality, so without invalidating the previous frame we could
+    // get stuck showing the last song's lyrics on glasses if the
+    // next display tick's text happened to drop in transit. Belt &
+    // braces with the new heartbeat redraw.
+    this.displayManager.invalidate();
+    this.updateDisplay();
   }
   
   private getConfidenceThreshold(state: RecognitionState, isSameSong: boolean): number {
