@@ -2,7 +2,6 @@ import { CurrentSong, LRCLine, LyricsChunk } from '../types';
 import { LRCService } from '../services/LRCService';
 import { parseLRC } from '../utils/lrcParser';
 import { chunkLyrics } from '../utils/textChunker';
-import { preprocessLRC, analyzeLRCPatterns } from '../utils/lrcPreprocessor';
 
 export class LyricsManager {
   private cachedLRC = new Map<string, LRCLine[]>();
@@ -38,16 +37,18 @@ export class LyricsManager {
     return lines;
   }
 
-  /** Shared parse + preprocess pipeline used by fetchLyrics and switchToLRCById. */
+  /**
+   * Parse the raw LRC text into LRC lines. We deliberately do NOT run
+   * `preprocessLRC` anymore — it was written for the older char-count
+   * chunker and aggressively splits any LRC line over 45 chars into
+   * smaller fake-timestamped pieces, which makes the chunker think a
+   * single sung phrase is two phrases. Today's chunker measures pixel
+   * widths via display-utils and combines short adjacent lines on its
+   * own, so the preprocessor only fights it.
+   */
   private processLRCText(lrcContent: string): LRCLine[] | null {
     const raw = parseLRC(lrcContent);
-    if (raw.length === 0) return null;
-    const analysis = analyzeLRCPatterns(raw);
-    if (analysis.recommendPreprocessing) {
-      const preprocessed = preprocessLRC(raw);
-      return preprocessed.lines;
-    }
-    return raw;
+    return raw.length === 0 ? null : raw;
   }
 
   async fetchLyrics(song: CurrentSong): Promise<LRCLine[] | null> {
@@ -63,28 +64,17 @@ export class LyricsManager {
         return null;
       }
 
-      const rawLrcData = parseLRC(lrcContent);
-      if (rawLrcData.length > 0) {
-        // Analyze if preprocessing would help
-        const analysis = analyzeLRCPatterns(rawLrcData);
-        
-        let lrcData = rawLrcData;
-        if (analysis.recommendPreprocessing) {
-          const preprocessed = preprocessLRC(rawLrcData);
-          lrcData = preprocessed.lines;
-          console.log('LRC preprocessed:', {
-            originalLines: rawLrcData.length,
-            processedLines: lrcData.length,
-            metadata: preprocessed.metadata
-          });
-        }
-        
-        this.cachedLRC.set(cacheKey, lrcData);
-        this.currentChunks = this.chunkLyrics(lrcData);
-        return lrcData;
-      }
+      const lrcData = parseLRC(lrcContent);
+      if (lrcData.length === 0) return null;
 
-      return null;
+      // No preprocessor — the chunker (display-utils + combining
+      // heuristics in textChunker.ts) handles pixel-accurate wrapping
+      // and adjacent-line combining far better than the old char-count
+      // preprocessor did. Keeping raw LRC entries here means we don't
+      // synthesize fake timestamps that confuse the chunker.
+      this.cachedLRC.set(cacheKey, lrcData);
+      this.currentChunks = this.chunkLyrics(lrcData);
+      return lrcData;
     } catch (error) {
       console.error('Error fetching lyrics:', error);
       return null;
