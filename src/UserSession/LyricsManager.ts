@@ -92,9 +92,11 @@ export class LyricsManager {
   }
 
   chunkLyrics(lrcData: LRCLine[]): LyricsChunk[] {
-    // Pixel-accurate wrapping via display-utils. Defaults to G1_PROFILE
-    // (576px / 5 lines) and word-boundary breaks.
-    return chunkLyrics(lrcData, {maxLinesPerChunk: 2, breakMode: "word"});
+    // Pixel-accurate wrapping via display-utils, plus the combining
+    // heuristics (max 3 HUD lines per chunk, max 3 combined LRC
+    // lines, max 2s gap, max 6s total chunk duration). Defaults
+    // live in textChunker.ts.
+    return chunkLyrics(lrcData, {breakMode: "word"});
   }
 
   getCurrentChunk(position: number): LyricsChunk | null {

@@ -136,24 +136,36 @@ export class FiveLineDisplayFormatter {
     // Line 1: song title (truncated if it doesn't fit one line)
     lines.push(this.fitOneLine(`♪ ${song.title}`));
 
-    // Line 2: previous lyric (empty at song start)
-    const prevText = previousChunk?.lines?.[0];
-    lines.push(prevText ? this.fitOneLine(prevText) : '');
+    // Lines 2–4: 3-row lyric context. The chunker combines adjacent
+    // LRC lines when they fit and are close in time, so the current
+    // chunk may occupy 1, 2, or 3 of those rows. We adapt:
+    //
+    //   1 line current → prev / "- " current / next   (full context)
+    //   2 line current → "- " line1 / line2 / next    (sacrifice prev)
+    //   3 line current → "- " line1 / line2 / line3   (no prev or next)
+    //
+    // The "- " marker always rides line 1 of the current chunk so the
+    // user knows where our timing guess starts.
+    const curLines = currentChunk?.lines ?? [];
 
-    // Line 3: current lyric (marked with "- ")
-    const curText = currentChunk?.lines?.[0];
-    if (curText) {
-      // Prepend marker, then fit. fitOneLine will truncate if needed.
-      lines.push(this.fitOneLine(`- ${curText}`));
+    if (curLines.length >= 3) {
+      lines.push(this.fitOneLine(`- ${curLines[0]}`));
+      lines.push(this.fitOneLine(`  ${curLines[1]}`));
+      lines.push(this.fitOneLine(`  ${curLines[2]}`));
+    } else if (curLines.length === 2) {
+      lines.push(this.fitOneLine(`- ${curLines[0]}`));
+      lines.push(this.fitOneLine(`  ${curLines[1]}`));
+      lines.push(this.fitOneLine(nextChunk?.lines?.[0] ?? ''));
     } else {
-      // Gap between phrases (or before first phrase): show an empty
-      // marker line so the title/prev/next stay in place visually.
-      lines.push('-');
+      // 0 or 1 line in current chunk. 0 means we're between phrases —
+      // hold an empty marker row so the prev/next rows don't shift.
+      const prevText = previousChunk?.lines?.[0];
+      lines.push(prevText ? this.fitOneLine(prevText) : '');
+      const curText = curLines[0];
+      lines.push(this.fitOneLine(curText ? `- ${curText}` : '-'));
+      const nextText = nextChunk?.lines?.[0];
+      lines.push(nextText ? this.fitOneLine(nextText) : '');
     }
-
-    // Line 4: next lyric (empty after the last phrase)
-    const nextText = nextChunk?.lines?.[0];
-    lines.push(nextText ? this.fitOneLine(nextText) : '');
 
     // Line 5: clock — clamp position so we never show "4:45 / 4:40"
     const shownPosition = song.duration > 0 ? Math.min(position, song.duration) : position;

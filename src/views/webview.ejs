@@ -344,11 +344,35 @@
             }
             lyricsSection.hidden = false;
 
-            // 3-line karaoke layout: prev (dim), current (bright, with
-            // ">" gutter), next (dim). Matches the glasses HUD.
-            lyricsPrev.textContent = firstLineOf(lyrics.previous);
-            lyricsCur.textContent = firstLineOf(lyrics.current) || " ";
-            lyricsNext.textContent = firstLineOf(lyrics.next);
+            // Mirror the glasses formatter: when the current chunk has
+            // 2 or 3 combined LRC lines, render them stacked in the
+            // current row and hide the prev (and next, for 3) row so
+            // the user sees the full chunk together.
+            const curLines = lyrics.current?.lines ?? [];
+
+            if (curLines.length >= 3) {
+                lyricsPrev.textContent = "";
+                lyricsPrev.hidden = true;
+                lyricsCur.innerHTML = curLines.slice(0, 3)
+                    .map((l) => `<span class="lyrics-cur-line">${escapeHtml(l) || "&nbsp;"}</span>`)
+                    .join("");
+                lyricsNext.textContent = "";
+                lyricsNext.hidden = true;
+            } else if (curLines.length === 2) {
+                lyricsPrev.textContent = "";
+                lyricsPrev.hidden = true;
+                lyricsCur.innerHTML = curLines
+                    .map((l) => `<span class="lyrics-cur-line">${escapeHtml(l) || "&nbsp;"}</span>`)
+                    .join("");
+                lyricsNext.textContent = firstLineOf(lyrics.next);
+                lyricsNext.hidden = false;
+            } else {
+                lyricsPrev.textContent = firstLineOf(lyrics.previous);
+                lyricsPrev.hidden = false;
+                lyricsCur.textContent = curLines[0] || " ";
+                lyricsNext.textContent = firstLineOf(lyrics.next);
+                lyricsNext.hidden = false;
+            }
 
             // Progress bar still tracks the current chunk's time span.
             if (lyrics.current) {

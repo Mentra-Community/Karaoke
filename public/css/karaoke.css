@@ -634,6 +634,21 @@ body {
     color: var(--text);
     letter-spacing: -0.01em;
     padding: 2px 0;
+    /* When the chunker combines multiple LRC lines into the current
+       chunk, .lyrics-text gets stacked spans (one per line). Switch to
+       a column flow then. */
+    flex-wrap: wrap;
+}
+
+.lyrics-text .lyrics-cur-line {
+    display: block;
+    width: 100%;
+}
+
+.lyrics-text:has(.lyrics-cur-line + .lyrics-cur-line) {
+    /* Multi-line current chunk: dial the line-height in a touch so
+       two or three stacked lines don't crowd the card. */
+    line-height: 1.2;
 }
 
 .lyrics-gutter {
