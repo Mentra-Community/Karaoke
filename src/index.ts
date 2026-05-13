@@ -1,6 +1,6 @@
 import { AppServer, AppSession } from "@mentra/sdk";
 import { UserSession } from './UserSession';
-import { setupExpressRoutes } from './webview';
+import { setupWebviewRoutes } from './webview';
 import dotenv from 'dotenv';
 // Load environment variables from .env file
 dotenv.config();
@@ -16,12 +16,14 @@ export class KaraokeApp extends AppServer {
 
   constructor() {
     super({
-      packageName: process.env.PACKAGE_NAME || 'karaoke-app',
+      packageName: process.env.PACKAGE_NAME || 'com.mentra.karaoke',
       apiKey: process.env.MENTRAOS_API_KEY || '',
-      port: parseInt(process.env.PORT || '3000')
+      port: parseInt(process.env.PORT || '3000'),
+      cookieSecret: process.env.COOKIE_SECRET || 'change-me-in-dotenv-please-32-chars-min',
+      publicDir: './public',
     });
     this.validateConfig();
-    setupExpressRoutes(this);
+    setupWebviewRoutes(this);
   }
 
   protected async onSession(
@@ -87,6 +89,16 @@ export class KaraokeApp extends AppServer {
   }
 }
 
-// Start the app
+// Start the app. The alpha SDK's AppServer extends Hono, so we hand
+// it to Bun.serve() ourselves (instead of relying on the old
+// app.start() auto-listen). `start()` is still called for SDK
+// lifecycle hooks (version check, logging).
 const app = new KaraokeApp();
 app.start().catch(console.error);
+
+const port = parseInt(process.env.PORT || '3000');
+Bun.serve({
+  port,
+  hostname: process.env.HOST || '0.0.0.0',
+  fetch: app.fetch,
+});
