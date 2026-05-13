@@ -1,3 +1,4 @@
+import {TextMeasurer, TextWrapper, G1_PROFILE} from '../utils/displayUtils';
 import { CurrentSong, LyricsChunk, AppState } from '../types';
 import { formatTimestamp } from '../utils/lrcParser';
 
@@ -8,29 +9,40 @@ export interface DisplayLine {
 
 export class FiveLineDisplayFormatter {
   private readonly MAX_LINES = 5;
-  private readonly MAX_CHARS = 45;
+
+  // Pixel-accurate width budget for the G1 HUD (576px). Used for any
+  // ad-hoc per-line measurement we still do in this file (the song
+  // info screen and the next-chunk preview truncation). Lyric chunks
+  // themselves are pre-wrapped by textChunker.
+  private readonly measurer = new TextMeasurer(G1_PROFILE);
+  private readonly wrapper = new TextWrapper(this.measurer, {
+    breakMode: 'word',
+    hyphenChar: '-',
+  });
+  private readonly displayWidthPx = G1_PROFILE.displayWidthPx;
 
   formatDisplay(
     appState: AppState,
     currentSong?: CurrentSong,
     currentChunk?: LyricsChunk | null,
     nextChunk?: LyricsChunk | null,
-    currentPosition?: number
+    currentPosition?: number,
+    previousChunk?: LyricsChunk | null,
   ): string[] {
     const lines: DisplayLine[] = [];
 
     switch (appState) {
       case AppState.LISTENING:
         return this.formatListening();
-        
+
       case AppState.PROCESSING:
         return this.formatProcessing();
-        
+
       case AppState.SONG_DETECTED_NO_LYRICS:
         return this.formatSongInfo(currentSong!, currentPosition || 0);
-        
+
       case AppState.SONG_DETECTED_WITH_LYRICS:
-        return this.formatLyricsDisplay(currentSong!, currentChunk, nextChunk, currentPosition || 0);
+        return this.formatLyricsDisplay(currentSong!, currentChunk, nextChunk, currentPosition || 0, previousChunk);
         
       default:
         return this.formatListening();
@@ -59,99 +71,102 @@ export class FiveLineDisplayFormatter {
 
   private formatSongInfo(song: CurrentSong, position: number): string[] {
     const lines: string[] = [];
-    
+
     // Line 1: Song title
-    lines.push(this.truncate(`♪ ${song.title}`));
-    
+    lines.push(this.fitOneLine(`♪ ${song.title}`));
+
     // Line 2: Artist
-    lines.push(this.truncate(`  ${song.artist}`));
-    
+    lines.push(this.fitOneLine(`  ${song.artist}`));
+
     // Line 3: Album (if available)
     if (song.album) {
-      lines.push(this.truncate(`  ${song.album}`));
+      lines.push(this.fitOneLine(`  ${song.album}`));
     } else {
       lines.push('');
     }
-    
+
     // Line 4: Empty
     lines.push('');
-    
-    // Line 5: Time
-    const timeStr = `  ${formatTimestamp(position)} / ${formatTimestamp(song.duration)}`;
+
+    // Line 5: Time. During the song-end grace window position keeps
+    // ticking past duration; clamp so the HUD never displays nonsense
+    // like "4:45 / 4:40".
+    const shownPosition = song.duration > 0 ? Math.min(position, song.duration) : position;
+    const timeStr = `  ${formatTimestamp(shownPosition)} / ${formatTimestamp(song.duration)}`;
     lines.push(timeStr);
-    
+
     return lines;
   }
 
+  /**
+   * New 5-line layout for SONG_DETECTED_WITH_LYRICS:
+   *
+   *   Line 1: ♪ Song title          (truncated to one line, never wraps)
+   *   Line 2: previous lyric line   (read-along buffer above)
+   *   Line 3: - current lyric line  (the one we think is sung right now)
+   *   Line 4: next lyric line       (read-ahead buffer below)
+   *   Line 5: 0:42 / 3:12           (position / duration)
+   *
+   * The "-" prefix on line 3 tells the user which line we believe is
+   * active, so if our timing is off by a phrase the user can still
+   * follow along by reading the line above or below.
+   *
+   * Each lyric slot is pixel-fit to one HUD line. When a chunk
+   * naturally wraps to multiple lines we take just the first line of
+   * its wrapped content here — the user gets coverage by reading the
+   * surrounding context lines from prev/next chunks.
+   */
   private formatLyricsDisplay(
     song: CurrentSong,
     currentChunk?: LyricsChunk | null,
     nextChunk?: LyricsChunk | null,
-    position: number = 0
+    position: number = 0,
+    previousChunk?: LyricsChunk | null,
   ): string[] {
     const lines: string[] = [];
-    
-    if (!currentChunk) {
-      // No current chunk, show song info
-      return this.formatSongInfo(song, position);
-    }
-    
-    // Strategy: Show current lyrics with minimal header
-    const hasMultipleLines = currentChunk.lines.length > 1;
-    const showTimeOnBottom = true;
-    
-    if (hasMultipleLines) {
-      // Two line chunk - use most space for lyrics
-      lines.push(this.truncate(currentChunk.lines[0]));
-      lines.push(this.truncate(currentChunk.lines[1]));
-      lines.push('-----');
-      
-      // Show next preview if available
-      if (nextChunk && nextChunk.lines.length > 0) {
-        const preview = this.truncate(nextChunk.lines[0]);
-        lines.push(preview.length > 42 ? preview.substring(0, 39) + '...' : preview);
-      } else {
-        lines.push('');
-      }
-      
-      // Time at bottom
-      lines.push(`${formatTimestamp(position)} / ${formatTimestamp(song.duration)}`);
+
+    // Line 1: song title (truncated if it doesn't fit one line)
+    lines.push(this.fitOneLine(`♪ ${song.title}`));
+
+    // Line 2: previous lyric (empty at song start)
+    const prevText = previousChunk?.lines?.[0];
+    lines.push(prevText ? this.fitOneLine(prevText) : '');
+
+    // Line 3: current lyric (marked with "- ")
+    const curText = currentChunk?.lines?.[0];
+    if (curText) {
+      // Prepend marker, then fit. fitOneLine will truncate if needed.
+      lines.push(this.fitOneLine(`- ${curText}`));
     } else {
-      // Single line chunk - add more context
-      lines.push(this.truncate(currentChunk.lines[0]));
-      lines.push('');
-      
-      // Show next chunk preview
-      if (nextChunk) {
-        lines.push('-----');
-        const preview = this.truncate(nextChunk.lines[0]);
-        lines.push(preview.length > 42 ? preview.substring(0, 39) + '...' : preview);
-      } else {
-        lines.push('');
-        lines.push('');
-      }
-      
-      // Time at bottom
-      lines.push(`${formatTimestamp(position)} / ${formatTimestamp(song.duration)}`);
+      // Gap between phrases (or before first phrase): show an empty
+      // marker line so the title/prev/next stay in place visually.
+      lines.push('-');
     }
-    
+
+    // Line 4: next lyric (empty after the last phrase)
+    const nextText = nextChunk?.lines?.[0];
+    lines.push(nextText ? this.fitOneLine(nextText) : '');
+
+    // Line 5: clock — clamp position so we never show "4:45 / 4:40"
+    const shownPosition = song.duration > 0 ? Math.min(position, song.duration) : position;
+    lines.push(`${formatTimestamp(shownPosition)} / ${formatTimestamp(song.duration)}`);
+
     return lines;
   }
 
-  private truncate(text: string): string {
-    if (text.length <= this.MAX_CHARS) {
-      return text;
-    }
-    
-    // Try to break at word boundary
-    const truncated = text.substring(0, this.MAX_CHARS - 3);
-    const lastSpace = truncated.lastIndexOf(' ');
-    
-    if (lastSpace > this.MAX_CHARS - 10) {
-      return truncated.substring(0, lastSpace) + '...';
-    }
-    
-    return truncated + '...';
+  /**
+   * Pixel-accurate single-line fit for the next-chunk preview slot.
+   * If the line overflows the HUD width, wrap and take just the first
+   * line so it doesn't bleed into the time/separator rows.
+   */
+  private fitOneLine(text: string): string {
+    if (!text) return '';
+    const result = this.wrapper.wrap(text, {
+      maxWidthPx: this.displayWidthPx,
+      maxLines: 1,
+      maxBytes: Infinity,
+    });
+    return result.lines[0] ?? text;
   }
 
   // Alternative format for instrumental breaks
@@ -180,7 +195,7 @@ export class FiveLineDisplayFormatter {
     
     // Previous context (if available)
     if (previousLine) {
-      const truncated = this.truncate('... ' + previousLine);
+      const truncated = this.fitOneLine('... ' + previousLine);
       lines.push(truncated);
     } else {
       lines.push('');
@@ -189,10 +204,10 @@ export class FiveLineDisplayFormatter {
     // Current lyrics
     if (currentChunk) {
       if (currentChunk.lines.length === 2) {
-        lines.push(this.truncate(currentChunk.lines[0]));
-        lines.push(this.truncate(currentChunk.lines[1]));
+        lines.push(this.fitOneLine(currentChunk.lines[0]));
+        lines.push(this.fitOneLine(currentChunk.lines[1]));
       } else {
-        lines.push(this.truncate(currentChunk.lines[0]));
+        lines.push(this.fitOneLine(currentChunk.lines[0]));
         lines.push('');
       }
     } else {
@@ -202,7 +217,7 @@ export class FiveLineDisplayFormatter {
     
     // Next preview (if room)
     if (lines.length < this.MAX_LINES && nextChunk) {
-      const preview = this.truncate(nextChunk.lines[0] + ' ...');
+      const preview = this.fitOneLine(nextChunk.lines[0] + ' ...');
       lines.push(preview);
     }
     

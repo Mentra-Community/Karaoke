@@ -8,9 +8,46 @@ export class LyricsManager {
   private cachedLRC = new Map<string, LRCLine[]>();
   private lrcService: LRCService;
   private currentChunks: LyricsChunk[] = [];
+  /** Which LRClib id the current chunks were built from, if any. Lets the
+   *  UI show "current version: <id>" and hide it from the alternatives list. */
+  private currentLRCId: number | null = null;
 
   constructor(lrcService: LRCService) {
     this.lrcService = lrcService;
+  }
+
+  getCurrentLRCId(): number | null {
+    return this.currentLRCId;
+  }
+
+  /**
+   * Replace the active LRC with one specified by LRClib id. Used by
+   * the webview's "Wrong version?" picker — the user has decided we
+   * picked the wrong cut and wants to switch.
+   *
+   * Returns the parsed LRC lines on success, null if the id isn't
+   * available or has no synced lyrics.
+   */
+  async switchToLRCById(id: number): Promise<LRCLine[] | null> {
+    const lrcContent = await this.lrcService.fetchById(id);
+    if (!lrcContent) return null;
+    const lines = this.processLRCText(lrcContent);
+    if (!lines) return null;
+    this.currentLRCId = id;
+    this.currentChunks = this.chunkLyrics(lines);
+    return lines;
+  }
+
+  /** Shared parse + preprocess pipeline used by fetchLyrics and switchToLRCById. */
+  private processLRCText(lrcContent: string): LRCLine[] | null {
+    const raw = parseLRC(lrcContent);
+    if (raw.length === 0) return null;
+    const analysis = analyzeLRCPatterns(raw);
+    if (analysis.recommendPreprocessing) {
+      const preprocessed = preprocessLRC(raw);
+      return preprocessed.lines;
+    }
+    return raw;
   }
 
   async fetchLyrics(song: CurrentSong): Promise<LRCLine[] | null> {
@@ -55,7 +92,9 @@ export class LyricsManager {
   }
 
   chunkLyrics(lrcData: LRCLine[]): LyricsChunk[] {
-    return chunkLyrics(lrcData, 8, 60, 2);
+    // Pixel-accurate wrapping via display-utils. Defaults to G1_PROFILE
+    // (576px / 5 lines) and word-boundary breaks.
+    return chunkLyrics(lrcData, {maxLinesPerChunk: 2, breakMode: "word"});
   }
 
   getCurrentChunk(position: number): LyricsChunk | null {
@@ -90,12 +129,39 @@ export class LyricsManager {
     const currentIndex = this.currentChunks.findIndex(
       chunk => chunk.startTime === currentChunk.startTime
     );
-    
+
     if (currentIndex >= 0 && currentIndex < this.currentChunks.length - 1) {
       return this.currentChunks[currentIndex + 1];
     }
 
     return null;
+  }
+
+  /**
+   * The chunk that just finished, used as the "buffer above" line on
+   * the HUD so the user can read along even when our timing is a
+   * little ahead of the audio. If there's no active current chunk
+   * (gap between LRC lines), this returns the most-recently-passed
+   * chunk so the HUD doesn't go blank between phrases.
+   */
+  getPreviousChunk(position: number): LyricsChunk | null {
+    if (this.currentChunks.length === 0) return null;
+
+    const current = this.getCurrentChunk(position);
+
+    if (current) {
+      const idx = this.currentChunks.findIndex(c => c.startTime === current.startTime);
+      return idx > 0 ? this.currentChunks[idx - 1] : null;
+    }
+
+    // No active chunk → pick the most recently passed one.
+    let best: LyricsChunk | null = null;
+    for (const chunk of this.currentChunks) {
+      if (chunk.startTime <= position) {
+        if (!best || chunk.startTime > best.startTime) best = chunk;
+      }
+    }
+    return best;
   }
 
   clearCache(): void {

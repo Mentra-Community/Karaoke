@@ -19,30 +19,111 @@
             <p class="tagline">Sing along on your glasses.</p>
         </header>
 
-        <section class="now-playing" id="now-playing">
-            <div class="np-empty" id="np-empty">
-                <div class="ear">👂</div>
-                <p class="np-title">Listening for a song…</p>
-                <p class="np-sub">Play any track nearby and we'll catch the lyrics.</p>
-            </div>
+        <nav class="tabs" role="tablist">
+            <button class="tab is-active" data-tab="now-playing" role="tab" aria-selected="true">Now Playing</button>
+            <button class="tab" data-tab="history" role="tab" aria-selected="false">
+                History
+                <span class="tab-count" id="tab-count-history">0</span>
+            </button>
+        </nav>
 
-            <div class="np-active" id="np-active" hidden>
-                <p class="np-eyebrow">Now Playing</p>
-                <h2 class="np-title" id="song-title">—</h2>
-                <p class="np-artist" id="song-artist">—</p>
-                <div class="np-meta">
-                    <span id="song-position">0:00</span>
-                    <span class="dot-sep">•</span>
-                    <span id="song-lyrics-flag">No lyrics</span>
+        <!-- ─── Now Playing tab ─────────────────────────────────────── -->
+        <section class="tab-panel is-active" id="panel-now-playing" role="tabpanel">
+            <section class="now-playing" id="now-playing">
+                <div class="np-empty" id="np-empty">
+                    <svg class="np-empty-icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                        <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z" />
+                    </svg>
+                    <p class="np-title">Listening for a song</p>
+                    <p class="np-sub">Play any track nearby and we'll catch the lyrics.</p>
+                    <button class="pill-btn" id="detect-now-btn" title="Force an immediate recognition pass">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3 12a9 9 0 0 1 15.5-6.36L21 8" />
+                            <path d="M21 3v5h-5" />
+                            <path d="M21 12a9 9 0 0 1-15.5 6.36L3 16" />
+                            <path d="M3 21v-5h5" />
+                        </svg>
+                        <span id="detect-now-label">Detect now</span>
+                    </button>
                 </div>
-            </div>
+
+                <div class="np-active" id="np-active" hidden>
+                    <img class="np-art" id="np-art" alt="" hidden>
+                    <div class="np-art-placeholder" id="np-art-placeholder">
+                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z" />
+                        </svg>
+                    </div>
+                    <div class="np-text">
+                        <p class="np-eyebrow">Now Playing</p>
+                        <h2 class="np-title" id="song-title">—</h2>
+                        <p class="np-artist" id="song-artist">—</p>
+                        <div class="np-meta">
+                            <span id="song-position">0:00</span>
+                            <span class="dot-sep">•</span>
+                            <span id="song-duration">0:00</span>
+                            <span class="dot-sep">•</span>
+                            <span id="song-lyrics-flag">No lyrics</span>
+                        </div>
+                    </div>
+                    <button class="fav-btn fav-btn-np" id="song-fav-btn" aria-label="Favorite" hidden>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="np-actions" id="np-actions" hidden>
+                    <button class="pill-btn" id="resync-btn" title="Re-recognize and snap to the current playback position">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M3 12a9 9 0 0 1 15.5-6.36L21 8" />
+                            <path d="M21 3v5h-5" />
+                            <path d="M21 12a9 9 0 0 1-15.5 6.36L3 16" />
+                            <path d="M3 21v-5h5" />
+                        </svg>
+                        <span id="resync-label">Resync</span>
+                    </button>
+                    <button class="text-btn" id="versions-btn">Wrong version?</button>
+                </div>
+
+                <!-- Lyric/audio offset nudge. Each tap shifts the LRC
+                     lookup by ±1 / ±5 seconds. The middle button shows
+                     the active offset and resets to 0 when tapped. -->
+                <div class="np-nudge" id="np-nudge" hidden>
+                    <span class="nudge-label">Lyrics</span>
+                    <button class="nudge-btn" data-delta="-5" title="Push lyrics 5s later">−5s</button>
+                    <button class="nudge-btn" data-delta="-1" title="Push lyrics 1s later">−1s</button>
+                    <button class="nudge-zero" id="nudge-zero" title="Reset offset to 0">0.0s</button>
+                    <button class="nudge-btn" data-delta="1" title="Pull lyrics 1s earlier">+1s</button>
+                    <button class="nudge-btn" data-delta="5" title="Pull lyrics 5s earlier">+5s</button>
+                </div>
+            </section>
+
+            <section class="lyrics" id="lyrics-section" hidden>
+                <p class="np-eyebrow">Lyrics</p>
+                <div class="lyrics-card">
+                    <div class="lyrics-current" id="lyrics-current"></div>
+                    <div class="lyrics-progress">
+                        <div class="lyrics-progress-bar" id="lyrics-progress-bar"></div>
+                    </div>
+                    <div class="lyrics-next" id="lyrics-next"></div>
+                </div>
+            </section>
         </section>
 
-        <section class="history">
-            <h3>Recently identified</h3>
-            <ol class="history-list" id="history-list">
-                <li class="history-empty">Nothing yet.</li>
-            </ol>
+        <!-- ─── History tab ─────────────────────────────────────────── -->
+        <section class="tab-panel" id="panel-history" role="tabpanel" hidden>
+            <div class="history-toolbar">
+                <div class="filter-chips" role="tablist" aria-label="Filter">
+                    <button class="chip is-active" data-filter="all" role="tab" aria-selected="true">All</button>
+                    <button class="chip" data-filter="favorites" role="tab" aria-selected="false">Favorites</button>
+                </div>
+                <div class="history-stats" id="history-stats">—</div>
+            </div>
+
+            <div class="history-feed" id="history-feed">
+                <p class="history-empty">Nothing identified yet. Play something nearby.</p>
+            </div>
         </section>
 
         <footer class="footer">
@@ -54,9 +135,32 @@
         </footer>
     </div>
 
+    <!-- Versions bottom sheet — opens when the user taps "Wrong version?" -->
+    <div class="sheet-backdrop" id="versions-backdrop" hidden></div>
+    <div class="sheet" id="versions-sheet" hidden role="dialog" aria-label="Pick the right version">
+        <div class="sheet-handle"></div>
+        <div class="sheet-header">
+            <div>
+                <h3 class="sheet-title">Pick the right version</h3>
+                <p class="sheet-sub" id="versions-sub">—</p>
+            </div>
+            <button class="sheet-close" id="versions-close" aria-label="Close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+        <div class="sheet-body" id="versions-list">
+            <p class="sheet-empty">Loading versions…</p>
+        </div>
+    </div>
+
     <script>
     (function () {
         const $ = (id) => document.getElementById(id);
+        const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+        // ─── Now Playing refs ────────────────────────────────────────
         const stateLabel = $("state-label");
         const stateDot = $("state-dot");
         const npEmpty = $("np-empty");
@@ -64,8 +168,31 @@
         const songTitle = $("song-title");
         const songArtist = $("song-artist");
         const songPosition = $("song-position");
+        const songDuration = $("song-duration");
         const songLyricsFlag = $("song-lyrics-flag");
-        const historyList = $("history-list");
+        const songFavBtn = $("song-fav-btn");
+        const npArt = $("np-art");
+        const npArtPlaceholder = $("np-art-placeholder");
+        const npActions = $("np-actions");
+        const npNudge = $("np-nudge");
+        const nudgeZero = $("nudge-zero");
+        const resyncBtn = $("resync-btn");
+        const resyncLabel = $("resync-label");
+        const versionsBtn = $("versions-btn");
+        const versionsBackdrop = $("versions-backdrop");
+        const versionsSheet = $("versions-sheet");
+        const versionsClose = $("versions-close");
+        const versionsList = $("versions-list");
+        const versionsSub = $("versions-sub");
+        const lyricsSection = $("lyrics-section");
+        const lyricsCurrent = $("lyrics-current");
+        const lyricsNext = $("lyrics-next");
+        const lyricsProgressBar = $("lyrics-progress-bar");
+
+        // ─── History refs ────────────────────────────────────────────
+        const historyFeed = $("history-feed");
+        const historyStats = $("history-stats");
+        const tabCountHistory = $("tab-count-history");
 
         const STATE_LABELS = {
             LISTENING: "Listening",
@@ -74,6 +201,11 @@
             SONG_DETECTED_NO_LYRICS: "Song detected",
             DISCONNECTED: "Not connected",
         };
+
+        let currentSongRef = null;       // {title, artist} for the fav button
+        let currentSongIsFavorite = false;
+        let activeFilter = "all";
+        let activeTab = "now-playing";
 
         function fmtTime(seconds) {
             if (typeof seconds !== "number" || !isFinite(seconds) || seconds < 0) return "0:00";
@@ -89,45 +221,24 @@
             const m = Math.floor(s / 60);
             if (m < 60) return m + "m ago";
             const h = Math.floor(m / 60);
-            return h + "h ago";
+            if (h < 24) return h + "h ago";
+            const d = Math.floor(h / 24);
+            return d + "d ago";
         }
 
-        function applyState(state) {
-            stateLabel.textContent = STATE_LABELS[state] ?? state;
-            stateDot.dataset.state = state;
-        }
-
-        function applySong(song) {
-            if (!song) {
-                npEmpty.hidden = false;
-                npActive.hidden = true;
-                return;
-            }
-            npEmpty.hidden = true;
-            npActive.hidden = false;
-            songTitle.textContent = song.title || "Unknown";
-            songArtist.textContent = song.artist || "Unknown artist";
-            songPosition.textContent = fmtTime(song.position);
-            songLyricsFlag.textContent = song.hasLyrics ? "Synced lyrics" : "No lyrics";
-            songLyricsFlag.dataset.lyrics = song.hasLyrics ? "yes" : "no";
-        }
-
-        function applyHistory(items) {
-            if (!items || items.length === 0) {
-                historyList.innerHTML = '<li class="history-empty">Nothing yet.</li>';
-                return;
-            }
-            historyList.innerHTML = items
-                .map((h) => `
-                    <li class="history-item">
-                        <div class="history-text">
-                            <span class="history-title">${escapeHtml(h.title)}</span>
-                            <span class="history-artist">${escapeHtml(h.artist)}</span>
-                        </div>
-                        <span class="history-time">${fmtRelative(h.identifiedAt)}</span>
-                    </li>
-                `)
-                .join("");
+        function dayBucket(ts) {
+            const d = new Date(ts);
+            const now = new Date();
+            const sameDay = (a, b) =>
+                a.getFullYear() === b.getFullYear() &&
+                a.getMonth() === b.getMonth() &&
+                a.getDate() === b.getDate();
+            const yesterday = new Date(now);
+            yesterday.setDate(now.getDate() - 1);
+            if (sameDay(d, now)) return "Today";
+            if (sameDay(d, yesterday)) return "Yesterday";
+            // e.g. "Mon, May 10"
+            return d.toLocaleDateString(undefined, {weekday: "short", month: "short", day: "numeric"});
         }
 
         function escapeHtml(s) {
@@ -138,6 +249,384 @@
                 .replace(/"/g, "&quot;");
         }
 
+        // ─── State / now playing rendering ──────────────────────────
+        function applyState(state) {
+            stateLabel.textContent = STATE_LABELS[state] ?? state;
+            stateDot.dataset.state = state;
+        }
+
+        function applySong(song) {
+            if (!song) {
+                npEmpty.hidden = false;
+                npActive.hidden = true;
+                npActions.hidden = true;
+                npNudge.hidden = true;
+                currentSongRef = null;
+                songFavBtn.hidden = true;
+                return;
+            }
+            npEmpty.hidden = true;
+            npActive.hidden = false;
+            npActions.hidden = false;
+            // Nudge cluster is only useful when we actually have synced
+            // lyrics loaded — no point shifting an offset against nothing.
+            npNudge.hidden = !song.hasLyrics;
+            songTitle.textContent = song.title || "Unknown";
+            songArtist.textContent = song.artist || "Unknown artist";
+            songPosition.textContent = fmtTime(song.position);
+            songDuration.textContent = fmtTime(song.duration);
+            // Three states: still fetching, found synced lyrics, gave up.
+            if (song.lyricsLoading) {
+                songLyricsFlag.textContent = "Loading lyrics…";
+                songLyricsFlag.dataset.lyrics = "loading";
+            } else if (song.hasLyrics) {
+                songLyricsFlag.textContent = "Synced lyrics";
+                songLyricsFlag.dataset.lyrics = "yes";
+            } else {
+                songLyricsFlag.textContent = "No lyrics";
+                songLyricsFlag.dataset.lyrics = "no";
+            }
+            currentSongRef = {title: song.title, artist: song.artist};
+            songFavBtn.hidden = false;
+
+            // Reflect the server-side lyrics offset on the middle nudge button.
+            const off = typeof song.lyricsOffsetSeconds === "number" ? song.lyricsOffsetSeconds : 0;
+            const sign = off > 0 ? "+" : off < 0 ? "−" : "";
+            nudgeZero.textContent = `${sign}${Math.abs(off).toFixed(1)}s`;
+            nudgeZero.dataset.zero = off === 0 ? "yes" : "no";
+
+            // Album artwork
+            if (song.artworkUrl) {
+                if (npArt.src !== song.artworkUrl) {
+                    npArt.onerror = () => { npArt.hidden = true; npArtPlaceholder.hidden = false; };
+                    npArt.onload = () => { npArt.hidden = false; npArtPlaceholder.hidden = true; };
+                    npArt.src = song.artworkUrl;
+                }
+            } else {
+                npArt.hidden = true;
+                npArt.removeAttribute("src");
+                npArtPlaceholder.hidden = false;
+            }
+        }
+
+        function applyLyrics(lyrics) {
+            if (!lyrics || !lyrics.current) {
+                lyricsSection.hidden = true;
+                return;
+            }
+            lyricsSection.hidden = false;
+            const cur = lyrics.current;
+            lyricsCurrent.innerHTML = cur.lines
+                .map((line) => `<p class="lyrics-line">${escapeHtml(line) || "&nbsp;"}</p>`)
+                .join("");
+            if (lyrics.next && lyrics.next.lines.length > 0) {
+                lyricsNext.innerHTML = lyrics.next.lines
+                    .slice(0, 2)
+                    .map((line) => `<p class="lyrics-line-next">${escapeHtml(line) || "&nbsp;"}</p>`)
+                    .join("");
+            } else {
+                lyricsNext.innerHTML = "";
+            }
+            const span = Math.max(0.01, cur.endTime - cur.startTime);
+            const through = Math.max(0, Math.min(1, (lyrics.position - cur.startTime) / span));
+            lyricsProgressBar.style.transform = `scaleX(${through})`;
+        }
+
+        function setNowPlayingFav(isFav) {
+            currentSongIsFavorite = isFav;
+            songFavBtn.dataset.fav = isFav ? "yes" : "no";
+            songFavBtn.setAttribute("aria-pressed", isFav ? "true" : "false");
+        }
+
+        // ─── History rendering ───────────────────────────────────────
+        function renderHistory(events) {
+            tabCountHistory.textContent = events.length;
+            if (!events || events.length === 0) {
+                historyFeed.innerHTML = '<p class="history-empty">' +
+                    (activeFilter === "favorites"
+                        ? "No favorites yet. Tap the heart on a song to save it."
+                        : "Nothing identified yet. Play something nearby.") +
+                    '</p>';
+                return;
+            }
+
+            // Group by day bucket, preserving newest-first order within
+            // each bucket. Server already gives us newest-first.
+            const buckets = [];
+            let currentBucket = null;
+            for (const e of events) {
+                const label = dayBucket(e.identifiedAt);
+                if (!currentBucket || currentBucket.label !== label) {
+                    currentBucket = {label, items: []};
+                    buckets.push(currentBucket);
+                }
+                currentBucket.items.push(e);
+            }
+
+            const html = buckets.map((bucket) => `
+                <div class="day-group">
+                    <h3 class="day-label">${escapeHtml(bucket.label)}</h3>
+                    <ul class="event-list">
+                        ${bucket.items.map((e) => `
+                            <li class="event-row" data-fav="${e.favorite ? "yes" : "no"}">
+                                ${e.artworkUrl
+                                    ? `<img class="event-art" src="${escapeHtml(e.artworkUrl)}" alt="">`
+                                    : `<div class="event-art event-art-fallback">
+                                        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                            <path d="M12 3v10.55A4 4 0 1 0 14 17V7h4V3h-6Z" />
+                                        </svg>
+                                       </div>`}
+                                <div class="event-text">
+                                    <span class="event-title">${escapeHtml(e.title)}</span>
+                                    <span class="event-artist">${escapeHtml(e.artist)}</span>
+                                </div>
+                                <div class="event-side">
+                                    <span class="event-time" title="${new Date(e.identifiedAt).toLocaleString()}">
+                                        ${new Date(e.identifiedAt).toLocaleTimeString([], {hour: "numeric", minute: "2-digit"})}
+                                    </span>
+                                    <button class="fav-btn"
+                                            data-title="${escapeHtml(e.title)}"
+                                            data-artist="${escapeHtml(e.artist)}"
+                                            data-fav="${e.favorite ? "yes" : "no"}"
+                                            aria-label="${e.favorite ? "Unfavorite" : "Favorite"}"
+                                            aria-pressed="${e.favorite ? "true" : "false"}">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </li>
+                        `).join("")}
+                    </ul>
+                </div>
+            `).join("");
+            historyFeed.innerHTML = html;
+        }
+
+        async function refreshHistory() {
+            try {
+                const params = new URLSearchParams({limit: "200"});
+                if (activeFilter === "favorites") params.set("favoritesOnly", "true");
+                const r = await fetch("/api/history?" + params.toString(), {credentials: "include"});
+                if (!r.ok) return;
+                const data = await r.json();
+                renderHistory(data.events || []);
+                if (data.stats) {
+                    const {totalSongs, uniqueSongs, favoriteCount} = data.stats;
+                    historyStats.textContent =
+                        `${totalSongs} plays · ${uniqueSongs} unique · ${favoriteCount} favorited`;
+                }
+                // Sync the Now Playing heart icon with the favorite state
+                // for the song that's currently on the screen.
+                if (currentSongRef) {
+                    const match = (data.events || []).find((e) =>
+                        e.title === currentSongRef.title && e.artist === currentSongRef.artist);
+                    setNowPlayingFav(!!match?.favorite);
+                }
+            } catch (_) {
+                // soft-fail; next tick will retry
+            }
+        }
+
+        async function toggleFavorite(title, artist) {
+            try {
+                const r = await fetch("/api/favorite", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    credentials: "include",
+                    body: JSON.stringify({title, artist}),
+                });
+                if (!r.ok) return;
+                await refreshHistory();
+            } catch (_) {}
+        }
+
+        // ─── Tab + filter wiring ─────────────────────────────────────
+        function setTab(name) {
+            activeTab = name;
+            $$(".tab").forEach((b) => {
+                const on = b.dataset.tab === name;
+                b.classList.toggle("is-active", on);
+                b.setAttribute("aria-selected", on ? "true" : "false");
+            });
+            $$(".tab-panel").forEach((p) => {
+                const on = p.id === "panel-" + name;
+                p.classList.toggle("is-active", on);
+                p.hidden = !on;
+            });
+            if (name === "history") refreshHistory();
+        }
+
+        function setFilter(name) {
+            activeFilter = name;
+            $$(".chip").forEach((c) => {
+                const on = c.dataset.filter === name;
+                c.classList.toggle("is-active", on);
+                c.setAttribute("aria-selected", on ? "true" : "false");
+            });
+            refreshHistory();
+        }
+
+        // Event delegation for tab clicks
+        $$(".tab").forEach((b) => b.addEventListener("click", () => setTab(b.dataset.tab)));
+        $$(".chip").forEach((c) => c.addEventListener("click", () => setFilter(c.dataset.filter)));
+
+        // Favorite toggles in the history list (delegation)
+        historyFeed.addEventListener("click", (ev) => {
+            const btn = ev.target.closest(".fav-btn");
+            if (!btn) return;
+            const {title, artist} = btn.dataset;
+            if (title && artist) toggleFavorite(title, artist);
+        });
+
+        // Now Playing heart button
+        songFavBtn.addEventListener("click", () => {
+            if (currentSongRef) toggleFavorite(currentSongRef.title, currentSongRef.artist);
+        });
+
+        // ─── Resync / Detect now ─────────────────────────────────────
+        // Both buttons hit the same endpoint — performRecognition()
+        // doesn't care whether we're already on a song or listening
+        // for one. We just relabel based on context.
+        async function triggerRecognize(label, busyEl, busyLabelEl, restoreText) {
+            const original = busyLabelEl.textContent;
+            busyEl.disabled = true;
+            busyLabelEl.textContent = label;
+            try {
+                const r = await fetch("/api/resync", {method: "POST", credentials: "include"});
+                if (!r.ok) throw new Error(r.statusText);
+                const data = await r.json();
+                busyLabelEl.textContent = data.recognized ? "Got it ✓" : "No match";
+            } catch (_) {
+                busyLabelEl.textContent = "Try again";
+            } finally {
+                setTimeout(() => {
+                    busyLabelEl.textContent = restoreText;
+                    busyEl.disabled = false;
+                }, 1800);
+            }
+        }
+
+        const detectNowBtn = $("detect-now-btn");
+        const detectNowLabel = $("detect-now-label");
+        resyncBtn.addEventListener("click", () =>
+            triggerRecognize("Resyncing…", resyncBtn, resyncLabel, "Resync"));
+        detectNowBtn.addEventListener("click", () =>
+            triggerRecognize("Listening…", detectNowBtn, detectNowLabel, "Detect now"));
+
+        // ─── Lyrics nudge ────────────────────────────────────────────
+        async function setOffset(body) {
+            try {
+                const r = await fetch("/api/lyrics-offset", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    credentials: "include",
+                    body: JSON.stringify(body),
+                });
+                if (!r.ok) return;
+                const data = await r.json();
+                if (typeof data.offset === "number") {
+                    const off = data.offset;
+                    const sign = off > 0 ? "+" : off < 0 ? "−" : "";
+                    nudgeZero.textContent = `${sign}${Math.abs(off).toFixed(1)}s`;
+                    nudgeZero.dataset.zero = off === 0 ? "yes" : "no";
+                }
+            } catch (_) {}
+        }
+        npNudge.addEventListener("click", (ev) => {
+            const btn = ev.target.closest(".nudge-btn");
+            if (btn) {
+                const delta = parseFloat(btn.dataset.delta);
+                if (Number.isFinite(delta)) setOffset({delta});
+                return;
+            }
+            if (ev.target === nudgeZero) setOffset({absolute: 0});
+        });
+
+        // ─── Wrong version? sheet ────────────────────────────────────
+        function openSheet() {
+            versionsBackdrop.hidden = false;
+            versionsSheet.hidden = false;
+            // Defer so the transition runs from hidden → visible
+            requestAnimationFrame(() => {
+                versionsBackdrop.classList.add("is-open");
+                versionsSheet.classList.add("is-open");
+            });
+        }
+        function closeSheet() {
+            versionsBackdrop.classList.remove("is-open");
+            versionsSheet.classList.remove("is-open");
+            setTimeout(() => {
+                versionsBackdrop.hidden = true;
+                versionsSheet.hidden = true;
+            }, 200);
+        }
+
+        async function loadVersions() {
+            versionsList.innerHTML = '<p class="sheet-empty">Loading versions…</p>';
+            if (currentSongRef) {
+                versionsSub.textContent = `${currentSongRef.title} — ${currentSongRef.artist}`;
+            } else {
+                versionsSub.textContent = "No song detected.";
+            }
+            try {
+                const r = await fetch("/api/versions", {credentials: "include"});
+                if (!r.ok) throw new Error(r.statusText);
+                const data = await r.json();
+                const versions = data.versions || [];
+                if (versions.length === 0) {
+                    versionsList.innerHTML = '<p class="sheet-empty">No alternatives found on LRClib.</p>';
+                    return;
+                }
+                versionsList.innerHTML = versions.map((v) => {
+                    const dur = (typeof v.duration === "number") ? fmtTime(v.duration) : "?";
+                    const synced = v.hasSyncedLyrics
+                        ? '<span class="ver-tag ver-tag-on">synced</span>'
+                        : '<span class="ver-tag">plain only</span>';
+                    return `
+                        <button class="ver-row" data-id="${v.id}" ${v.hasSyncedLyrics ? "" : "disabled"}>
+                            <div class="ver-text">
+                                <span class="ver-title">${escapeHtml(v.trackName)}</span>
+                                <span class="ver-artist">${escapeHtml(v.artistName)}${v.albumName ? " · " + escapeHtml(v.albumName) : ""}</span>
+                                ${v.preview ? `<span class="ver-preview">${escapeHtml(v.preview)}…</span>` : ""}
+                            </div>
+                            <div class="ver-side">
+                                ${synced}
+                                <span class="ver-duration">${dur}</span>
+                            </div>
+                        </button>
+                    `;
+                }).join("");
+            } catch (_) {
+                versionsList.innerHTML = '<p class="sheet-empty">Could not load alternatives.</p>';
+            }
+        }
+
+        async function pickVersion(lrcId) {
+            try {
+                const r = await fetch("/api/lrc", {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    credentials: "include",
+                    body: JSON.stringify({lrcId}),
+                });
+                if (!r.ok) return;
+                closeSheet();
+                tick(); // refresh now-playing immediately
+            } catch (_) {}
+        }
+
+        versionsBtn.addEventListener("click", () => { openSheet(); loadVersions(); });
+        versionsClose.addEventListener("click", closeSheet);
+        versionsBackdrop.addEventListener("click", closeSheet);
+        versionsList.addEventListener("click", (ev) => {
+            const row = ev.target.closest(".ver-row");
+            if (!row || row.disabled) return;
+            const id = parseInt(row.dataset.id, 10);
+            if (Number.isFinite(id)) pickVersion(id);
+        });
+
+        // ─── Polling ─────────────────────────────────────────────────
         async function tick() {
             try {
                 const r = await fetch("/api/stats", {credentials: "include"});
@@ -148,7 +637,7 @@
                 const data = await r.json();
                 applyState(data.connected ? data.state : "DISCONNECTED");
                 applySong(data.currentSong);
-                applyHistory(data.history);
+                applyLyrics(data.lyrics);
             } catch (_err) {
                 applyState("DISCONNECTED");
             }
@@ -156,6 +645,23 @@
 
         tick();
         setInterval(tick, 1000);
+
+        // History refresh: every 10s on Now Playing tab so the count
+        // chip stays warm; on every visible interaction when History
+        // tab is active.
+        refreshHistory();
+        setInterval(() => {
+            if (activeTab === "history") refreshHistory();
+            else {
+                // background light refresh: keep the count chip current
+                fetch("/api/history?limit=1", {credentials: "include"})
+                    .then((r) => r.ok ? r.json() : null)
+                    .then((d) => {
+                        if (d?.stats) tabCountHistory.textContent = d.stats.totalSongs;
+                    })
+                    .catch(() => {});
+            }
+        }, 10000);
     })();
     </script>
 </body>

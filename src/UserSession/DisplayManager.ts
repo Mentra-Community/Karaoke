@@ -1,7 +1,22 @@
 import { AppSession } from '@mentra/sdk';
+import * as fs from 'fs';
 import { CurrentSong, LyricsChunk, AppState } from '../types';
 import { formatTimestamp } from '../utils/lrcParser';
 import { FiveLineDisplayFormatter } from './FiveLineDisplayFormatter';
+
+/**
+ * Where the audit log of glasses HUD frames gets appended.
+ * One entry per text change. Plain text, greppable, intended for
+ * after-the-fact debugging not UI.
+ *
+ * Curl it from a running app via GET /api/display-log.
+ */
+const DISPLAY_LOG_PATH = './display-log.txt';
+
+interface PreviousFrameMeta {
+  at: number;
+  text: string;
+}
 
 export class DisplayManager {
   private currentDisplay: string = '';
@@ -11,6 +26,8 @@ export class DisplayManager {
   private logger: AppSession['logger'];
   private formatter: FiveLineDisplayFormatter;
   private useNewFormatter: boolean = true; // Feature flag
+
+  private previousFrame: PreviousFrameMeta | null = null;
 
   constructor(session: AppSession) {
     this.session = session;
@@ -80,14 +97,59 @@ export class DisplayManager {
 
   private updateDisplay(text: string): void {
     if (text !== this.currentDisplay) {
-      this.logger.debug({ 
+      this.logger.debug({
         newText: text,
-        previousText: this.currentDisplay 
+        previousText: this.currentDisplay
       }, 'Updating display text');
       this.currentDisplay = text;
       this.lastUpdateTime = Date.now();
       this.session.layouts.showTextWall(text);
     }
+  }
+
+  /**
+   * Append one frame to ./display-log.txt for after-the-fact audit.
+   * Dedupes on identical text. Records how long the previous frame
+   * stayed on screen.
+   *
+   * Format (per frame):
+   *
+   *   [ISO timestamp]  +<duration>ms  <APP_STATE>  pos=<m:ss>/<m:ss>  song="Title — Artist"
+   *   | line 1 of the HUD
+   *   | line 2
+   *   | ...
+   *
+   * Plain text so it greps cleanly. Newlines between frames.
+   */
+  private recordDisplayFrame(
+    text: string,
+    lines: string[],
+    appState: AppState,
+    position: number,
+    song: CurrentSong | undefined,
+  ): void {
+    if (this.previousFrame && this.previousFrame.text === text) {
+      // No actual change — skip. Previous frame's durationMs grows.
+      return;
+    }
+    const now = Date.now();
+    const durationMs = this.previousFrame ? now - this.previousFrame.at : 0;
+
+    const songStr = song
+      ? `song="${song.title.replace(/"/g, '\\"')} — ${song.artist.replace(/"/g, '\\"')}"`
+      : 'song=none';
+    const posStr = song
+      ? `pos=${formatTimestamp(position)}/${formatTimestamp(song.duration)}`
+      : 'pos=-';
+    const header = `[${new Date(now).toISOString()}]  +${durationMs}ms  ${AppState[appState]}  ${posStr}  ${songStr}`;
+    const body = lines.map((l) => `| ${l}`).join('\n');
+    const block = header + '\n' + body + '\n\n';
+
+    fs.appendFile(DISPLAY_LOG_PATH, block, (err) => {
+      if (err) this.logger.warn({err: err.message}, 'Failed to append display-log.txt');
+    });
+
+    this.previousFrame = {at: now, text};
   }
 
   getCurrentDisplay(): string {
@@ -109,7 +171,8 @@ export class DisplayManager {
     currentSong?: CurrentSong,
     currentChunk?: LyricsChunk | null,
     nextChunk?: LyricsChunk | null,
-    position?: number
+    position?: number,
+    previousChunk?: LyricsChunk | null,
   ): void {
     if (!this.useNewFormatter) {
       return;
@@ -120,13 +183,14 @@ export class DisplayManager {
       currentSong,
       currentChunk,
       nextChunk,
-      position
+      position,
+      previousChunk,
     );
 
     const formattedText = lines.join('\n');
-    
+
     // Only log when state changes or when displaying actual lyrics
-    if (appState === AppState.SONG_DETECTED_WITH_LYRICS || 
+    if (appState === AppState.SONG_DETECTED_WITH_LYRICS ||
         formattedText !== this.currentDisplay) {
       this.logger.debug({
         appState: AppState[appState],
@@ -136,7 +200,9 @@ export class DisplayManager {
       }, 'Display state changed');
     }
 
-    // note: this.updateDisplay already contains check to only update if text has changed.
+    // Record the frame BEFORE updateDisplay so we can compare against
+    // the current text. updateDisplay dedupes on its own.
+    this.recordDisplayFrame(formattedText, lines, appState, position ?? 0, currentSong);
     this.updateDisplay(formattedText);
   }
 }

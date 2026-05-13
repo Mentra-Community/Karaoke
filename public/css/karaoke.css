@@ -1,20 +1,23 @@
 /**
  * karaoke.css
  *
- * Dark, music-app vibe. Single column, mobile-first. No frameworks.
+ * Palette matches the Karaoke app icon: bright neon green on
+ * near-black. No gradients (other than the album-art crossfade and
+ * the lyrics progress bar), no purple, no emojis.
  */
 
 :root {
-    --bg: #0c0a18;
-    --bg-elev: #161229;
-    --bg-card: #1d1838;
-    --border: rgba(255, 255, 255, 0.08);
+    --bg: #050c08;
+    --bg-elev: #0e1b12;
+    --bg-card: #122118;
+    --border: rgba(63, 240, 117, 0.12);
+    --border-strong: rgba(63, 240, 117, 0.25);
     --text: #ffffff;
-    --text-dim: rgba(255, 255, 255, 0.6);
+    --text-dim: rgba(255, 255, 255, 0.65);
     --text-faint: rgba(255, 255, 255, 0.4);
-    --accent: #ff5fa2;
-    --accent-2: #6c63ff;
-    --green: #2ecc71;
+    --accent: #3ff075;
+    --accent-soft: rgba(63, 240, 117, 0.18);
+    --accent-dim: #1b7a3c;
     --amber: #f5a623;
     --radius: 16px;
 }
@@ -23,6 +26,11 @@
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+}
+
+/* HTML `hidden` attribute needs to win over display: flex on cards. */
+[hidden] {
+    display: none !important;
 }
 
 html, body {
@@ -34,9 +42,10 @@ html, body {
 }
 
 body {
+    /* Subtle radial glow in the icon-green family. No purple. */
     background:
-        radial-gradient(at 80% -10%, rgba(108, 99, 255, 0.35) 0%, transparent 50%),
-        radial-gradient(at 0% 100%, rgba(255, 95, 162, 0.3) 0%, transparent 55%),
+        radial-gradient(at 50% -10%, rgba(63, 240, 117, 0.18) 0%, transparent 60%),
+        radial-gradient(at 0% 100%, rgba(27, 122, 60, 0.25) 0%, transparent 55%),
         var(--bg);
     min-height: 100vh;
     padding-bottom: env(safe-area-inset-bottom);
@@ -83,11 +92,11 @@ body {
     background: var(--text-faint);
     transition: background 0.2s ease;
 }
-.dot[data-state="LISTENING"]               { background: var(--accent-2); animation: pulse 1.4s ease-in-out infinite; }
-.dot[data-state="PROCESSING"]              { background: var(--amber);     animation: pulse 1s   ease-in-out infinite; }
-.dot[data-state="SONG_DETECTED_WITH_LYRICS"] { background: var(--green); }
-.dot[data-state="SONG_DETECTED_NO_LYRICS"]   { background: var(--accent); }
-.dot[data-state="DISCONNECTED"]            { background: var(--text-faint); }
+.dot[data-state="LISTENING"]                 { background: var(--accent);     animation: pulse 1.4s ease-in-out infinite; }
+.dot[data-state="PROCESSING"]                { background: var(--amber);      animation: pulse 1s   ease-in-out infinite; }
+.dot[data-state="SONG_DETECTED_WITH_LYRICS"] { background: var(--accent); }
+.dot[data-state="SONG_DETECTED_NO_LYRICS"]   { background: var(--accent-dim); }
+.dot[data-state="DISCONNECTED"]              { background: var(--text-faint); }
 
 @keyframes pulse {
     0%, 100% { opacity: 1;    transform: scale(1);   }
@@ -98,10 +107,7 @@ body {
     font-size: 38px;
     font-weight: 800;
     letter-spacing: -0.02em;
-    background: linear-gradient(120deg, var(--accent) 0%, var(--accent-2) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
+    color: var(--accent);
 }
 
 .tagline {
@@ -124,11 +130,17 @@ body {
 .np-empty {
     text-align: center;
     color: var(--text-dim);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
 }
 
-.np-empty .ear {
-    font-size: 40px;
-    margin-bottom: 12px;
+.np-empty-icon {
+    width: 56px;
+    height: 56px;
+    color: var(--accent);
+    opacity: 0.85;
 }
 
 .np-empty .np-title {
@@ -143,35 +155,90 @@ body {
     color: var(--text-faint);
 }
 
+.np-empty .pill-btn {
+    margin-top: 6px;
+}
+
+/* Now-playing active layout: album art on the left, text on the right. */
+.np-active {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 18px;
+}
+
+.np-art {
+    width: 96px;
+    height: 96px;
+    border-radius: 12px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    object-fit: cover;
+    flex-shrink: 0;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+}
+
+.np-art-placeholder {
+    width: 96px;
+    height: 96px;
+    border-radius: 12px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    opacity: 0.6;
+}
+
+.np-art-placeholder svg {
+    width: 44px;
+    height: 44px;
+}
+
+.np-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
 .np-active .np-eyebrow {
     text-transform: uppercase;
     letter-spacing: 0.1em;
     font-size: 11px;
     color: var(--accent);
-    margin-bottom: 8px;
     font-weight: 700;
 }
 
 .np-active .np-title {
-    font-size: 26px;
+    font-size: 22px;
     font-weight: 700;
     letter-spacing: -0.01em;
-    margin-bottom: 6px;
     line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .np-active .np-artist {
-    font-size: 16px;
+    font-size: 15px;
     color: var(--text-dim);
-    margin-bottom: 18px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .np-meta {
     display: flex;
     align-items: center;
-    gap: 10px;
-    font-size: 13px;
+    gap: 8px;
+    font-size: 12px;
     color: var(--text-faint);
+    margin-top: 4px;
+    font-variant-numeric: tabular-nums;
 }
 
 .dot-sep {
@@ -179,69 +246,610 @@ body {
 }
 
 #song-lyrics-flag[data-lyrics="yes"] {
-    color: var(--green);
+    color: var(--accent);
+}
+#song-lyrics-flag[data-lyrics="loading"] {
+    color: var(--text-dim);
+    animation: pulse 1.4s ease-in-out infinite;
 }
 
-/* History */
-.history h3 {
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-faint);
-    margin-bottom: 10px;
-    font-weight: 700;
-}
-
-.history-list {
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-}
-
-.history-item {
+/* Now-playing actions row (sits below the art + text + heart row) */
+.np-actions {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    padding: 12px 16px;
+    flex-wrap: wrap;
+}
+
+.pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 14px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border: 1px solid var(--border-strong);
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, opacity 0.15s ease, transform 0.1s ease;
+}
+.pill-btn svg { width: 14px; height: 14px; }
+.pill-btn:hover { background: rgba(63, 240, 117, 0.28); }
+.pill-btn:active { transform: scale(0.97); }
+.pill-btn:disabled { opacity: 0.6; cursor: progress; }
+
+.text-btn {
+    background: transparent;
+    border: 0;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    padding: 4px 0;
+    text-decoration: underline;
+    text-decoration-color: rgba(255, 255, 255, 0.2);
+    text-underline-offset: 3px;
+    transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+.text-btn:hover {
+    color: var(--text);
+    text-decoration-color: var(--accent);
+}
+
+/* Lyrics offset nudge cluster */
+.np-nudge {
+    margin-top: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.nudge-label {
+    font-size: 12px;
+    color: var(--text-faint);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-right: 4px;
+}
+
+.nudge-btn,
+.nudge-zero {
+    padding: 6px 10px;
+    background: var(--bg-elev);
+    color: var(--text-dim);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    font-variant-numeric: tabular-nums;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.nudge-btn:hover,
+.nudge-zero:hover {
+    background: var(--bg-card);
+    color: var(--text);
+}
+
+.nudge-btn:active,
+.nudge-zero:active {
+    transform: scale(0.96);
+}
+
+.nudge-zero {
+    min-width: 56px;
+    text-align: center;
+    color: var(--accent);
+    border-color: var(--border-strong);
+    background: var(--accent-soft);
+}
+
+.nudge-zero[data-zero="yes"] {
+    color: var(--text-dim);
+    background: var(--bg-elev);
+    border-color: var(--border);
+}
+
+/* Bottom sheet (Wrong-version picker) */
+.sheet-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 49;
+}
+.sheet-backdrop.is-open { opacity: 1; }
+
+.sheet {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 80vh;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-strong);
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    padding: 12px 18px 24px;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    transform: translateY(100%);
+    transition: transform 0.22s cubic-bezier(.2,.8,.2,1);
+    z-index: 50;
+}
+.sheet.is-open { transform: translateY(0); }
+
+.sheet-handle {
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.18);
+    align-self: center;
+    margin-top: 4px;
+}
+
+.sheet-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.sheet-title {
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.sheet-sub {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 70vw;
+}
+
+.sheet-close {
+    width: 36px;
+    height: 36px;
+    border-radius: 999px;
+    background: transparent;
+    border: 0;
+    color: var(--text-dim);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.sheet-close:hover { background: rgba(255, 255, 255, 0.06); color: var(--text); }
+.sheet-close svg { width: 18px; height: 18px; }
+
+.sheet-body {
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-right: 2px;
+    margin-right: -2px;
+}
+
+.sheet-empty {
+    color: var(--text-faint);
+    font-size: 14px;
+    padding: 18px 4px;
+    text-align: center;
+}
+
+.ver-row {
+    width: 100%;
+    text-align: left;
     background: var(--bg-elev);
     border: 1px solid var(--border);
     border-radius: 12px;
+    padding: 12px 14px;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+.ver-row:hover:not(:disabled) {
+    background: var(--bg-card);
+    border-color: var(--border-strong);
+}
+.ver-row:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
-.history-text {
+.ver-text {
     display: flex;
     flex-direction: column;
+    gap: 2px;
     min-width: 0;
+    flex: 1;
 }
 
-.history-title {
-    font-size: 15px;
+.ver-title {
+    font-size: 14px;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.history-artist {
-    font-size: 13px;
+.ver-artist {
+    font-size: 12px;
     color: var(--text-dim);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
-.history-time {
+.ver-preview {
+    font-size: 11px;
+    color: var(--text-faint);
+    font-style: italic;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+}
+
+.ver-side {
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+}
+
+.ver-tag {
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-faint);
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.ver-tag-on {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.ver-duration {
+    font-size: 11px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Live lyrics */
+.lyrics .np-eyebrow {
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-size: 11px;
+    color: var(--accent);
+    margin-bottom: 10px;
+    font-weight: 700;
+}
+
+.lyrics-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.lyrics-current {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.lyrics-line {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    color: var(--text);
+}
+
+.lyrics-progress {
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(63, 240, 117, 0.08);
+    overflow: hidden;
+}
+
+.lyrics-progress-bar {
+    height: 100%;
+    background: var(--accent);
+    transform-origin: left center;
+    transform: scaleX(0);
+    transition: transform 0.4s linear;
+}
+
+.lyrics-next {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 22px;
+}
+
+.lyrics-line-next {
+    font-size: 15px;
+    color: var(--text-faint);
+    line-height: 1.3;
+}
+
+/* Tab bar */
+.tabs {
+    display: flex;
+    gap: 6px;
+    padding: 4px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+}
+
+.tab {
+    flex: 1;
+    padding: 10px 14px;
+    background: transparent;
+    border: 0;
+    border-radius: 999px;
+    color: var(--text-dim);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.tab.is-active {
+    background: var(--accent-soft);
+    color: var(--accent);
+}
+
+.tab-count {
+    min-width: 22px;
+    padding: 0 6px;
+    height: 18px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    font-size: 11px;
+    font-weight: 700;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+}
+
+.tab.is-active .tab-count {
+    background: rgba(63, 240, 117, 0.25);
+    color: var(--accent);
+}
+
+/* Tab panels */
+.tab-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+/* History toolbar (filter chips + stats line) */
+.history-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+.filter-chips {
+    display: inline-flex;
+    gap: 6px;
+}
+
+.chip {
+    padding: 6px 14px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.chip.is-active {
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-color: var(--border-strong);
+}
+
+.history-stats {
     font-size: 12px;
     color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+}
+
+/* History feed */
+.history-feed {
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+
+.day-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.day-label {
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--text-faint);
+    font-weight: 700;
+    padding-left: 4px;
+}
+
+.event-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.event-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+}
+
+.event-row[data-fav="yes"] {
+    border-color: var(--border-strong);
+}
+
+.event-art {
+    width: 44px;
+    height: 44px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: var(--bg-card);
+    flex-shrink: 0;
+}
+
+.event-art-fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    opacity: 0.55;
+}
+
+.event-art-fallback svg {
+    width: 22px;
+    height: 22px;
+}
+
+.event-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.event-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.event-artist {
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.event-side {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.event-time {
+    font-size: 11px;
+    color: var(--text-faint);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Favorite (heart) buttons — used in event rows and in Now Playing */
+.fav-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 999px;
+    background: transparent;
+    border: 0;
+    color: var(--text-faint);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+}
+
+.fav-btn:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.fav-btn:active {
+    transform: scale(0.94);
+}
+
+.fav-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.fav-btn[data-fav="yes"] {
+    color: var(--accent);
+}
+
+.fav-btn[data-fav="yes"] svg {
+    fill: var(--accent);
+}
+
+.fav-btn-np {
+    margin-left: auto;
+    flex-shrink: 0;
 }
 
 .history-empty {
     color: var(--text-faint);
     font-size: 14px;
     padding: 12px 4px;
+    text-align: center;
 }
 
 /* Footer */
