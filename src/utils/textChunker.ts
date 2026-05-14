@@ -86,22 +86,73 @@ export function chunkLyrics(lrcData: LRCLine[], options: ChunkerOptions = {}): L
   const wrapper = new TextWrapper(measurer, {breakMode, hyphenChar: "-"});
 
   /**
-   * Join a list of LRC text snippets with single spaces, then wrap the
-   * combined string into HUD-fitting lines. Re-wrapping the joined
-   * text (vs concatenating individually-wrapped pieces) is the key:
-   * "Now it's time to leave the capsule" + "if you dare" wraps to
-   * ONE 47-char line, not two short lines. The user gets a single
-   * coherent phrase as one chunk.
+   * Greedy LRC packing: pack as many full LRC lines onto a HUD line
+   * as will fit on a single wrapped row, then break at the LRC
+   * boundary and start a new HUD line for the next LRC entry.
+   *
+   * Why not "join everything then re-wrap":
+   *   Joining + re-wrapping optimizes for fewest HUD lines, but it
+   *   ignores phrase boundaries. Eleanor Rigby gave us:
+   *     LRC line 1: "All the lonely people (ah, look at all the lonely people)"
+   *     LRC line 2: "Where do they all belong?"
+   *   Joined → wrapped fits "...Where do" onto row 1 and "they all
+   *   belong?" alone on row 2 — a mid-phrase break that reads worse
+   *   than the natural break between the two LRC lines.
+   *
+   * With greedy packing:
+   *   - "Now it's time to leave the capsule" + "if you dare" both fit
+   *     in one row (47 chars) → one HUD line containing both LRC lines.
+   *   - Eleanor Rigby's two lines DON'T fit in one row together → row
+   *     1 = LRC 1, row 2 = LRC 2. Clean phrase boundary.
+   *
+   * Final pass re-wraps any individual LRC line that's still too wide
+   * for one row (rare — only when a single LRC line itself is long).
    */
-  const wrapJoined = (texts: string[]): string[] => {
-    const joined = texts.join(" ").replace(/\s+/g, " ").trim();
-    if (!joined) return [];
-    const result = wrapper.wrap(joined, {
-      maxWidthPx,
-      maxLines: Infinity,
-      maxBytes: Infinity,
-    });
-    return result.lines.length > 0 ? result.lines : [joined];
+  const wrapGreedy = (texts: string[]): string[] => {
+    const cleaned = texts
+      .map((t) => t.replace(/\s+/g, " ").trim())
+      .filter((t) => t.length > 0);
+    if (cleaned.length === 0) return [];
+
+    const packedRows: string[] = [];
+    let current = "";
+    for (const text of cleaned) {
+      if (!current) {
+        current = text;
+        continue;
+      }
+      const candidate = current + " " + text;
+      const wrapped = wrapper.wrap(candidate, {
+        maxWidthPx,
+        maxLines: Infinity,
+        maxBytes: Infinity,
+      });
+      if (wrapped.lines.length === 1) {
+        // Both LRC lines still fit on a single HUD row.
+        current = candidate;
+      } else {
+        // Adding this LRC line would cause a wrap — break at the
+        // LRC boundary instead.
+        packedRows.push(current);
+        current = text;
+      }
+    }
+    if (current) packedRows.push(current);
+
+    // Final pass: if a single packed row is itself wider than maxWidthPx
+    // (because a single LRC line is long), wrap it normally so chunk
+    // line-count is still measured against pixel-fitting reality.
+    const finalLines: string[] = [];
+    for (const row of packedRows) {
+      const wrapped = wrapper.wrap(row, {
+        maxWidthPx,
+        maxLines: Infinity,
+        maxBytes: Infinity,
+      });
+      if (wrapped.lines.length > 1) finalLines.push(...wrapped.lines);
+      else finalLines.push(row);
+    }
+    return finalLines;
   };
 
   const items: WrappedItem[] = lrcData
@@ -117,7 +168,7 @@ export function chunkLyrics(lrcData: LRCLine[], options: ChunkerOptions = {}): L
     const start = items[i];
     const startTime = start.lrc.timestamp;
     let texts = [start.lrc.text];
-    let lines = wrapJoined(texts);
+    let lines = wrapGreedy(texts);
     let endTime = start.endTime;
     let combinedLrcCount = 1;
     let j = i + 1;
@@ -132,7 +183,7 @@ export function chunkLyrics(lrcData: LRCLine[], options: ChunkerOptions = {}): L
       if (combinedLrcCount + 1 > maxLrcLines) break;
 
       const candidateTexts = [...texts, next.lrc.text];
-      const candidateLines = wrapJoined(candidateTexts);
+      const candidateLines = wrapGreedy(candidateTexts);
       if (candidateLines.length > maxLines) break;
 
       // Measure VOCAL time-span: first LRC timestamp → next LRC line's

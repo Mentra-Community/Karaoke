@@ -19,6 +19,7 @@ docs show why.
 | 005 | Persistent history + favorites                         | landed |
 | 006 | End-of-song HUD clear + alert mode                     | landed |
 | 007 | Cloud storage workaround (SDK URL bug)                 | landed |
+| 008 | Greedy LRC packing (break at phrase boundaries)        | landed |
 
 ## When to add one
 
