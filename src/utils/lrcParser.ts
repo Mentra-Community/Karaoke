@@ -1,5 +1,29 @@
 import { LRCLine } from '../types';
 
+/**
+ * LRClib serves some entries with HTML-encoded characters
+ * ("I know it&apos;s", "books&apos; written pages", "&amp;", "&quot;").
+ * The browser renders them correctly in the webview because it does
+ * HTML entity decoding automatically. The glasses HUD does not — it
+ * just shows whatever raw bytes we hand to `session.layouts.showTextWall`,
+ * so "I know it&apos;s" appears literally on screen.
+ *
+ * Decode the handful of entities lyrics actually use, plus numeric
+ * decimal/hex escapes for safety. Anything else stays as-is.
+ */
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(parseInt(dec, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&apos;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    // &amp; last so we don't double-decode things like "&amp;apos;"
+    .replace(/&amp;/g, '&');
+}
+
 export function parseLRC(lrcContent: string): LRCLine[] {
   // Normalize Windows (CRLF) and old-Mac (CR) line endings to LF so
   // the line-by-line regex match doesn't silently drop every line
@@ -29,7 +53,7 @@ export function parseLRC(lrcContent: string): LRCLine[] {
 
     if (stamps.length === 0) continue;
 
-    const text = line.trim();
+    const text = decodeHtmlEntities(line.trim());
     if (!text) continue;
 
     for (const timestamp of stamps) {
