@@ -9,7 +9,7 @@
     "ngrok": "ngrok http --url=isaiah-tpa.ngrok.app 3000"
   },
   "author": "",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "description": "",
   "dependencies": {
     "@mentra/sdk": "3.0.0-alpha.4",
